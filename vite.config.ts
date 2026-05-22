@@ -12,7 +12,8 @@ function getPlugins() {
 export default defineConfig({
   plugins: getPlugins(),
   server: {
-    port: 5000,
+    port: 5001,
+    strictPort: true,
     host: '0.0.0.0',
     hmr: {
       overlay: true,

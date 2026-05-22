@@ -153,12 +153,44 @@ function isPartnerAvailable(
   return true;
 }
 
+export type AutoScheduleSkipReason =
+  | 'time_unmapped'
+  | 'cinema_unknown'
+  | 'no_district_staff'
+  | 'slot_unavailable'
+  | 'only_one_available';
+
+export interface AutoScheduleFailure {
+  key: string;
+  label: string;
+  reason: AutoScheduleSkipReason;
+  detail: string;
+}
+
+export interface AutoScheduleReport {
+  assigned: number;
+  total: number;
+  failures: AutoScheduleFailure[];
+}
+
+const SKIP_REASON_LABELS: Record<AutoScheduleSkipReason, string> = {
+  time_unmapped: '影片时间无法映射到字幕员时段',
+  cinema_unknown: '影院未识别所属行政区',
+  no_district_staff: '该区域无负责字幕员或全员不可用',
+  slot_unavailable: '该时段无空闲字幕员',
+  only_one_available: '仅找到一名可用字幕员（缺搭档）',
+};
+
+function cellLabel(cell: ScheduleCell): string {
+  return `${cell.date} ${cell.cinema} ${cell.hall} ${cell.timeSlot}《${cell.movieName}》`;
+}
+
 // 为单个电影分配字幕员
 function assignSubtitleForMovie(
   cell: ScheduleCell,
   subtitlerStatuses: Map<string, SubtitlerStatus>,
   constraints: ScheduleConstraints
-): { assignment: ScheduleAssignment; success: boolean } {
+): { assignment: ScheduleAssignment; success: boolean; reason?: AutoScheduleSkipReason; detail?: string } {
   const { date: movieDate, cinema, hall, timeSlot: movieTimeSlot } = cell;
   const slotKey = getUniqueSlot(movieDate, cinema, hall, movieTimeSlot);
   
@@ -166,7 +198,12 @@ function assignSubtitleForMovie(
   const subtitlerTimeSlot = getSubtitlerTimeSlot(movieTimeSlot);
   if (!subtitlerTimeSlot) {
     console.warn(`无法将影片时间 ${movieTimeSlot} 转换为字幕员时间`);
-    return { assignment: { subtitler1: null, subtitler2: null, subtitler1Id: null, subtitler2Id: null }, success: false };
+    return {
+      assignment: { subtitler1: null, subtitler2: null, subtitler1Id: null, subtitler2Id: null },
+      success: false,
+      reason: 'time_unmapped',
+      detail: `影片时间 ${movieTimeSlot} 不在映射表中`,
+    };
   }
   
   // 将影片日期转换为字幕员表日期格式
@@ -176,7 +213,12 @@ function assignSubtitleForMovie(
   const districtFull = getCinemaDistrict(cinema);
   if (!districtFull) {
     console.warn(`无法找到影院 ${cinema} 所属区域`);
-    return { assignment: { subtitler1: null, subtitler2: null, subtitler1Id: null, subtitler2Id: null }, success: false };
+    return {
+      assignment: { subtitler1: null, subtitler2: null, subtitler1Id: null, subtitler2Id: null },
+      success: false,
+      reason: 'cinema_unknown',
+      detail: `影院「${cinema}」未在区域映射表中`,
+    };
   }
   const districtShort = toShortDistrictName(districtFull);
 
@@ -185,7 +227,7 @@ function assignSubtitleForMovie(
   
   subtitlerStatuses.forEach((status) => {
     // 检查字幕员是否负责这个区域
-    const districtValue = status.row.districts[`${districtShort}区`];
+    const districtValue = status.row.districts[districtShort];
     if (!districtValue) return; // 不负责此区域
 
     // 检查该时间段是否可用（使用字幕员时间和字幕员日期）
@@ -262,6 +304,34 @@ function assignSubtitleForMovie(
 
   const success = subtitler1 !== null && subtitler2 !== null;
 
+  if (!success) {
+    let reason: AutoScheduleSkipReason = 'slot_unavailable';
+    let detail = '该时段没有满足约束的空闲字幕员';
+    if (availableSubtitlers.length === 0) {
+      const hasDistrictStaff = Array.from(subtitlerStatuses.values()).some(
+        s => !!s.row.districts[districtShort]
+      );
+      reason = hasDistrictStaff ? 'slot_unavailable' : 'no_district_staff';
+      detail = hasDistrictStaff
+        ? `${subtitlerDate} ${subtitlerTimeSlot} 无可用字幕员（已满/被占用/时间表无空）`
+        : `「${districtShort}」区域没有负责的字幕员`;
+    } else if (subtitler1 && !subtitler2) {
+      reason = 'only_one_available';
+      detail = `仅 ${subtitler1.name} 可用，搭档或第二字幕员不可用`;
+    }
+    return {
+      assignment: {
+        subtitler1: subtitler1?.name || null,
+        subtitler2: subtitler2?.name || null,
+        subtitler1Id: subtitler1?.id || null,
+        subtitler2Id: subtitler2?.id || null,
+      },
+      success: false,
+      reason,
+      detail,
+    };
+  }
+
   return {
     assignment: {
       subtitler1: subtitler1?.name || null,
@@ -269,7 +339,7 @@ function assignSubtitleForMovie(
       subtitler1Id: subtitler1?.id || null,
       subtitler2Id: subtitler2?.id || null,
     },
-    success
+    success,
   };
 }
 
@@ -336,15 +406,28 @@ function calculateCinemaScore(
   return { changeCount: totalChangeCount, changePersonCount: totalChangePersonCount };
 }
 
+export function formatSkipReason(reason: AutoScheduleSkipReason): string {
+  return SKIP_REASON_LABELS[reason];
+}
+
 // 主自动排班函数
 export function autoSchedule(
   scheduleTable: ScheduleTable,
   subtitlerData: ParsedSchedule | null,
   manualAssignments: Map<string, ScheduleAssignment>
 ): Map<string, ScheduleAssignment> {
+  return autoScheduleWithReport(scheduleTable, subtitlerData, manualAssignments).assignments;
+}
+
+export function autoScheduleWithReport(
+  scheduleTable: ScheduleTable,
+  subtitlerData: ParsedSchedule | null,
+  manualAssignments: Map<string, ScheduleAssignment>
+): { assignments: Map<string, ScheduleAssignment>; report: AutoScheduleReport } {
   const constraints = loadConstraints();
   const districtPriority = loadDistrictPriority();
   const result = new Map<string, ScheduleAssignment>();
+  const failures: AutoScheduleFailure[] = [];
 
   // 复制手动分配的排班
   manualAssignments.forEach((assignment, key) => {
@@ -353,7 +436,10 @@ export function autoSchedule(
 
   if (!subtitlerData || subtitlerData.rows.length === 0) {
     console.warn('没有字幕员数据');
-    return result;
+    return {
+      assignments: result,
+      report: { assigned: 0, total: scheduleTable.cells.length, failures: [] },
+    };
   }
 
   console.log(`[DEBUG] 字幕员数据: ${subtitlerData.rows.length} 人, 日期: ${subtitlerData.dates.join(', ')}`);
@@ -448,13 +534,22 @@ export function autoSchedule(
         // 跳过已手动分配的
         if (result.has(key)) return;
 
-        const { assignment, success } = assignSubtitleForMovie(
+        const { assignment, success, reason, detail } = assignSubtitleForMovie(
           cell,
           subtitlerStatuses,
           constraints
         );
 
         result.set(key, assignment);
+
+        if (!success && reason) {
+          failures.push({
+            key,
+            label: cellLabel(cell),
+            reason,
+            detail: detail || formatSkipReason(reason),
+          });
+        }
 
         // 如果分配成功，也标记搭档已使用
         if (success && assignment.subtitler2) {
@@ -472,7 +567,18 @@ export function autoSchedule(
     });
   });
 
-  return result;
+  const assigned = Array.from(result.values()).filter(
+    a => a.subtitler1 && a.subtitler2
+  ).length;
+
+  return {
+    assignments: result,
+    report: {
+      assigned,
+      total: scheduleTable.cells.length,
+      failures,
+    },
+  };
 }
 
 // 检查是否所有电影都已分配

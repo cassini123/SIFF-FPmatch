@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIFF 排班助手 — 文档中心</title>
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --text: #1a1d26;
+      --text-muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --gold: #b8860b;
+      --gold-soft: #fef9e7;
+      --code-bg: #f1f3f8;
+      --pre-bg: #1e293b;
+      --pre-text: #e2e8f0;
+      --sidebar-width: 248px;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .layout { display: flex; min-height: 100vh; }
+
+    nav.toc {
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1rem 0.875rem 1.5rem;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+
+    .doc-brand {
+      margin: 0 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .doc-switch {
+      display: flex;
+      gap: 0.25rem;
+      margin: 0 0.25rem 1rem;
+      padding: 0.25rem;
+      background: var(--bg);
+      border-radius: var(--radius);
+    }
+
+    .doc-switch button {
+      flex: 1;
+      padding: 0.45rem 0.35rem;
+      border: none;
+      border-radius: 6px;
+      font: inherit;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      background: transparent;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .doc-switch button:hover { color: var(--text); }
+
+    .doc-switch button.active {
+      background: var(--surface);
+      color: var(--accent);
+      box-shadow: var(--shadow);
+    }
+
+    nav.toc h2 {
+      margin: 0 0.5rem 0.6rem;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .toc-panel { display: none; }
+    .toc-panel.active { display: block; }
+
+    nav.toc ul { list-style: none; margin: 0; padding: 0; }
+
+    nav.toc li { margin: 0.2rem 0; }
+
+    nav.toc a {
+      display: block;
+      padding: 0.32rem 0.5rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    nav.toc a:hover {
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    nav.toc .toc-l2 {
+      padding-left: 0.75rem;
+      font-size: 0.8125rem;
+    }
+
+    .content-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .doc-page { display: none; }
+    .doc-page.active { display: block; }
+
+    main {
+      max-width: 920px;
+      padding: 2.5rem 3rem 4rem;
+      margin: 0 auto;
+    }
+
+    .doc-header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .doc-header h1 {
+      margin: 0 0 0.5rem;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .meta {
+      margin: 0;
+      padding: 1rem 1.25rem;
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius);
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+    }
+
+    .meta.gold {
+      background: var(--gold-soft);
+      border-left-color: var(--gold);
+    }
+
+    section { margin-bottom: 2.5rem; }
+
+    h2 {
+      margin: 2rem 0 1rem;
+      padding-bottom: 0.5rem;
+      font-size: 1.5rem;
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+    }
+
+    h3 {
+      margin: 1.5rem 0 0.75rem;
+      font-size: 1.125rem;
+      font-weight: 600;
+    }
+
+    h4 {
+      margin: 1.25rem 0 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    p { margin: 0.75rem 0; }
+
+    strong { font-weight: 600; }
+
+    ul, ol { margin: 0.75rem 0; padding-left: 1.5rem; }
+    li { margin: 0.35rem 0; }
+
+    table {
+      width: 100%;
+      margin: 1rem 0;
+      border-collapse: collapse;
+      font-size: 0.9375rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    th, td {
+      padding: 0.65rem 1rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+
+    th {
+      background: #f4f6f9;
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) td { background: #fafbfc; }
+
+    code {
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 0.875em;
+      padding: 0.15em 0.4em;
+      background: var(--code-bg);
+      border-radius: 4px;
+      color: #c7254e;
+    }
+
+    pre {
+      margin: 1rem 0;
+      padding: 1.25rem 1.5rem;
+      background: var(--pre-bg);
+      color: var(--pre-text);
+      border-radius: var(--radius);
+      overflow-x: auto;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      box-shadow: var(--shadow);
+    }
+
+    pre code {
+      padding: 0;
+      background: none;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .diagram {
+      margin: 1rem 0;
+      padding: 1.25rem 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+      font-size: 0.875rem;
+      line-height: 1.8;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .tip {
+      margin: 1rem 0;
+      padding: 0.875rem 1.125rem;
+      background: var(--gold-soft);
+      border-left: 4px solid var(--gold);
+      border-radius: var(--radius);
+      font-size: 0.9375rem;
+      color: var(--text-muted);
+    }
+
+    .screenshot {
+      margin: 1.25rem 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .screenshot figcaption {
+      padding: 0.6rem 1rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      background: #f4f6f9;
+      border-top: 1px solid var(--border);
+    }
+
+    .faq dt {
+      margin: 1.25rem 0 0.35rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .faq dd {
+      margin: 0 0 0.75rem;
+      padding-left: 0;
+      color: var(--text-muted);
+    }
+
+    .faq dd ol, .faq dd ul {
+      margin-top: 0.5rem;
+      color: var(--text);
+    }
+
+    ol.steps { padding-left: 1.5rem; }
+    ol.steps li { margin: 0.5rem 0; }
+
+    footer.doc-footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.9375rem;
+      color: var(--text-muted);
+    }
+
+    footer.doc-footer a,
+    .inline-nav {
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    footer.doc-footer a:hover,
+    .inline-nav:hover { text-decoration: underline; }
+
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      nav.toc {
+        position: relative;
+        width: 100%;
+        height: auto;
+        max-height: none;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      main { padding: 1.5rem 1.25rem 3rem; }
+    }
+
+    @media print {
+      nav.toc { display: none; }
+      .doc-page { display: block !important; }
+      main { max-width: none; padding: 0; }
+      body { background: white; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="toc" aria-label="文档导航">
+      <p class="doc-brand">SIFF 排班助手</p>
+      <div class="doc-switch" role="tablist">
+        <button type="button" id="btn-tech" class="active" data-page="tech" role="tab" aria-selected="true">技术说明</button>
+        <button type="button" id="btn-manual" data-page="manual" role="tab" aria-selected="false">操作手册</button>
+      </div>
+
+      <div id="toc-tech" class="toc-panel active">
+        <h2>目录</h2>
+        <ul>
+          <li><a href="#tech-overview" data-page="tech">一、系统概述</a></li>
+          <li class="toc-l2"><a href="#tech-templates" data-page="tech">1.1 标准模板文件</a></li>
+          <li class="toc-l2"><a href="#tech-stack" data-page="tech">1.2 技术栈</a></li>
+          <li><a href="#tech-architecture" data-page="tech">二、系统架构</a></li>
+          <li class="toc-l2"><a href="#tech-routes" data-page="tech">2.1 路由</a></li>
+          <li class="toc-l2"><a href="#tech-context" data-page="tech">2.2 三层数据 Context</a></li>
+          <li><a href="#tech-data-model" data-page="tech">三、核心数据模型</a></li>
+          <li><a href="#tech-sync" data-page="tech">四、数据同步机制</a></li>
+          <li><a href="#tech-pages" data-page="tech">五、各页面与排班总表</a></li>
+          <li><a href="#tech-auto-schedule" data-page="tech">六、自动排班算法</a></li>
+          <li><a href="#tech-export" data-page="tech">七、导出</a></li>
+          <li><a href="#tech-localstorage" data-page="tech">八、localStorage 键名</a></li>
+          <li><a href="#tech-source-index" data-page="tech">九、源码索引</a></li>
+          <li><a href="#tech-download-impl" data-page="tech">十、模板下载实现</a></li>
+        </ul>
+      </div>
+
+      <div id="toc-manual" class="toc-panel">
+        <h2>目录</h2>
+        <ul>
+          <li><a href="#manual-start" data-page="manual">1. 快速开始</a></li>
+          <li><a href="#manual-step1" data-page="manual">2. 下载并填写模板</a></li>
+          <li><a href="#manual-step2" data-page="manual">3. 上传数据</a></li>
+          <li><a href="#manual-step3" data-page="manual">4. 核对电影排片</a></li>
+          <li><a href="#manual-step4" data-page="manual">5. 核对字幕员</a></li>
+          <li><a href="#manual-step5" data-page="manual">6. 配置排班规则</a></li>
+          <li><a href="#manual-step6" data-page="manual">7. 排班编辑</a></li>
+          <li><a href="#manual-step7" data-page="manual">8. 排班总表</a></li>
+          <li><a href="#manual-step8" data-page="manual">9. 导出结果</a></li>
+          <li><a href="#manual-faq" data-page="manual">10. 常见问题</a></li>
+          <li class="toc-l2"><a href="#manual-appendix" data-page="manual">附录</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <div class="content-wrap">
+      <!-- ========== 技术说明 ========== -->
+      <div id="page-tech" class="doc-page active">
+        <main>
+          <header class="doc-header">
+            <h1>SIFF 排班助手 — 技术说明文档</h1>
+            <p class="meta">版本：v1.0.0 · 项目：<code>SIFF260520</code><br />最后更新：2026-05-23 · 配套 <a class="inline-nav" data-goto="manual">操作手册</a></p>
+          </header>
+
+          <section id="tech-overview">
+            <h2>一、系统概述</h2>
+            <p><strong>SIFF 排班助手</strong>是面向上海国际电影节字幕组排班工作的 Web 应用。系统将两类 Excel 源数据——<strong>电影排片表</strong>与<strong>字幕员时间表</strong>——整合为可编辑、可自动分配、可导出的<strong>排班总表</strong>，实现「每一场电影 → 两名字幕员」的完整排班闭环。</p>
+            <h3 id="tech-templates">1.1 标准模板文件</h3>
+            <p>系统内置两份标准 Excel 模板，存放于 <code>public/templates/</code>：</p>
+            <table>
+              <thead><tr><th>按钮</th><th>模板文件</th><th>用途</th></tr></thead>
+              <tbody>
+                <tr><td>下载字幕员模板</td><td><code>后五天问卷调查 给静静.xlsx</code></td><td>字幕员姓名、负责区域、搭档、各日各时段可用性</td></tr>
+                <tr><td>下载排片表模板</td><td><code>2024排片表.xlsx</code></td><td>电影节各影院、影厅、时间段的排片信息</td></tr>
+              </tbody>
+            </table>
+            <p>下载实现：<code>src/lib/downloadTemplate.ts</code>，通过 <code>fetch</code> 获取静态文件并触发浏览器下载。</p>
+            <h3 id="tech-stack">1.2 技术栈</h3>
+            <p>React 18 · TypeScript · Vite 7 · React Router 7 · Tailwind CSS · SheetJS (xlsx) · react-dnd · Framer Motion · Zod · localStorage 持久化</p>
+          </section>
+
+          <section id="tech-architecture">
+            <h2>二、系统架构</h2>
+            <h3 id="tech-routes">2.1 路由</h3>
+            <table>
+              <thead><tr><th>路径</th><th>页面</th><th>功能</th></tr></thead>
+              <tbody>
+                <tr><td><code>/</code></td><td>仪表盘</td><td>数据导入、模板下载、流程导航</td></tr>
+                <tr><td><code>/schedule-table</code></td><td>电影排片</td><td>只读查看排片表</td></tr>
+                <tr><td><code>/subtitler</code></td><td>字幕员表</td><td>只读查看字幕员可用性</td></tr>
+                <tr><td><code>/schedule</code></td><td>排班编辑</td><td>日历/矩阵视图分配字幕员</td></tr>
+                <tr><td><code>/schedule-overview</code></td><td>排班总表</td><td>主编辑页、自动排班、导出</td></tr>
+                <tr><td><code>/settings</code></td><td>设置</td><td>行政区优先级、排班约束</td></tr>
+              </tbody>
+            </table>
+            <h3 id="tech-context">2.2 三层数据 Context</h3>
+            <div class="diagram">ScheduleTableContext  →  ParsedScheduleTable（排片原始数据）
+ScheduleContext       →  ScheduleTable（排班总表：cells + assignments）
+SubtitlerContext      →  ParsedSchedule（字幕员原始数据）</div>
+            <p>Provider 嵌套：<code>SubtitlerProvider</code> → <code>ScheduleTableProvider</code> → <code>ScheduleProvider</code></p>
+          </section>
+
+          <section id="tech-data-model">
+            <h2>三、核心数据模型</h2>
+            <h3>3.1 排片表 ParsedScheduleTable</h3>
+            <ul>
+              <li><strong>解析</strong>：<code>src/lib/parseScheduleTable.ts</code></li>
+              <li><strong>字段</strong>：dates, cinemas, halls, timeSlots, rows[]</li>
+              <li><strong>影片时间段</strong>：08:30, 09:30, 10:00, 10:30, 13:00, 15:30, 18:00, 18:30, 20:40</li>
+              <li><strong>localStorage</strong>：<code>schedule_table_data_v2</code></li>
+            </ul>
+            <h3>3.2 字幕员表 ParsedSchedule</h3>
+            <ul>
+              <li><strong>解析</strong>：<code>src/lib/parseSubtitlerExcel.ts</code></li>
+              <li><strong>字段</strong>：rows[]（name, schedule, districts, partner）</li>
+              <li><strong>字幕员时间段</strong>：9:00, 10:30, 13:00, 14:00, 15:00, 17:00, 18:30, 20:40, 23:00</li>
+              <li><strong>格子语义</strong>：<code>null</code> = 空闲（可分配），有值 = 已占用</li>
+              <li><strong>localStorage</strong>：<code>subtitler_data_v2</code></li>
+            </ul>
+            <h3>3.3 排班总表 ScheduleTable</h3>
+            <pre><code>interface ScheduleTable {
+  cells: ScheduleCell[];
+  assignments: { [key: string]: ScheduleAssignment };
+}
+// key = `${date}|${cinema}|${hall}|${timeSlot}`</code></pre>
+            <ul>
+              <li><strong>构建</strong>：<code>buildScheduleTableFromParsedData()</code></li>
+              <li><strong>合并</strong>：<code>syncScheduleTableWithParsedData()</code></li>
+              <li><strong>localStorage</strong>：<code>schedule_table_assignments_v2</code></li>
+            </ul>
+            <h3>3.4 时间映射 TIME_MAPPING</h3>
+            <p>影片时间与字幕员时间通过 <code>src/lib/scheduleConstants.ts</code> 中的 <code>TIME_MAPPING</code> 对应。日期格式：排片表 <code>2024-06-18</code> ↔ 字幕员表 <code>18日</code>。</p>
+            <h3>3.5 影院行政区映射</h3>
+            <p><code>CINEMA_DISTRICTS</code> 维护影院到上海 11 个行政区的映射，用于自动排班区域过滤。</p>
+          </section>
+
+          <section id="tech-sync">
+            <h2>四、数据同步机制</h2>
+            <table>
+              <thead><tr><th>触发</th><th>行为</th></tr></thead>
+              <tbody>
+                <tr><td>上传排片表</td><td><code>setScheduleData</code> → <code>useScheduleTableSync</code> → <code>syncFromParsedData</code> 合并 cells</td></tr>
+                <tr><td>上传字幕员表</td><td><code>setSubtitlerData</code>，不影响已有 assignments</td></tr>
+                <tr><td><code>updateAssignment</code></td><td>更新 assignments 并写入 localStorage</td></tr>
+                <tr><td>排班总表页 scheduleData 变化</td><td>重建 cells（<code>buildScheduleTableFromParsedData</code>）</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="tech-pages">
+            <h2>五、各页面与排班总表的关系</h2>
+            <table>
+              <thead><tr><th>页面</th><th>读总表</th><th>写总表</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>仪表盘</td><td>否</td><td>间接</td><td>上传排片表重建 cells；模板下载不影响总表</td></tr>
+                <tr><td>电影排片</td><td>否</td><td>否</td><td>只读参照，有电影的格子 = 总表有 cell</td></tr>
+                <tr><td>字幕员表</td><td>否</td><td>否</td><td>约束数据源，决定下拉可选人</td></tr>
+                <tr><td>排班编辑</td><td>是</td><td>是</td><td>日历/矩阵写入 assignments</td></tr>
+                <tr><td>排班总表</td><td>是</td><td>是</td><td>主编辑 + 自动排班 + 导出 Excel</td></tr>
+                <tr><td>设置</td><td>否</td><td>间接</td><td>约束影响自动排班结果</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="tech-auto-schedule">
+            <h2>六、自动排班算法</h2>
+            <p><strong>入口</strong>：排班总表 → 自动排班模式 → 执行自动排班<br /><strong>实现</strong>：<code>src/lib/autoSchedule.ts</code></p>
+            <ol class="steps">
+              <li>读取 <code>settings_constraints</code> 与 <code>settings_districts</code></li>
+              <li>保留已有手动分配（manualAssignments）</li>
+              <li>按行政区优先级逐区处理</li>
+              <li>每场：匹配区域 → 过滤空闲字幕员 → 检查 daily/total/互斥 → 优先搭档 → 写入 subtitler1/2</li>
+            </ol>
+            <p>默认约束：2 场/天、5 场/总计、时段互斥、优先时间块少的字幕员。</p>
+          </section>
+
+          <section id="tech-export">
+            <h2>七、导出</h2>
+            <p>排班总表页「导出 Excel」生成 <code>排班总表_YYYYMMDD.xlsx</code>：按日期分 Sheet；列含影院、影厅、日期、星期、时间、电影、字幕员1、字幕员2；未识别区域影院行标灰。</p>
+          </section>
+
+          <section id="tech-localstorage">
+            <h2>八、localStorage 键名</h2>
+            <table>
+              <thead><tr><th>键</th><th>内容</th></tr></thead>
+              <tbody>
+                <tr><td><code>schedule_table_data_v2</code></td><td>排片原始数据</td></tr>
+                <tr><td><code>schedule_table_file_name</code></td><td>排片文件名</td></tr>
+                <tr><td><code>subtitler_data_v2</code></td><td>字幕员原始数据</td></tr>
+                <tr><td><code>subtitler_file_name</code></td><td>字幕员文件名</td></tr>
+                <tr><td><code>schedule_table_assignments_v2</code></td><td>排班总表</td></tr>
+                <tr><td><code>schedule_mode</code></td><td>manual / auto</td></tr>
+                <tr><td><code>settings_districts</code></td><td>行政区优先级</td></tr>
+                <tr><td><code>settings_constraints</code></td><td>排班约束</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="tech-source-index">
+            <h2>九、源码索引</h2>
+            <table>
+              <thead><tr><th>文件</th><th>职责</th></tr></thead>
+              <tbody>
+                <tr><td><code>src/lib/downloadTemplate.ts</code></td><td>模板下载</td></tr>
+                <tr><td><code>src/lib/parseScheduleTable.ts</code></td><td>排片表解析</td></tr>
+                <tr><td><code>src/lib/parseSubtitlerExcel.ts</code></td><td>字幕员表解析</td></tr>
+                <tr><td><code>src/lib/buildScheduleViewData.ts</code></td><td>cells 构建与视图数据</td></tr>
+                <tr><td><code>src/lib/autoSchedule.ts</code></td><td>自动排班</td></tr>
+                <tr><td><code>src/lib/scheduleConstants.ts</code></td><td>时间映射、区域、约束</td></tr>
+                <tr><td><code>src/lib/scheduleHelpers.ts</code></td><td>可用字幕员查询</td></tr>
+                <tr><td><code>src/hooks/useScheduleTableSync.ts</code></td><td>排片→总表同步</td></tr>
+                <tr><td><code>src/pages/Dashboard.tsx</code></td><td>仪表盘</td></tr>
+                <tr><td><code>src/pages/ScheduleOverview.tsx</code></td><td>排班总表</td></tr>
+                <tr><td><code>src/pages/Schedule.tsx</code></td><td>排班编辑</td></tr>
+                <tr><td><code>public/templates/</code></td><td>标准模板静态文件</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="tech-download-impl">
+            <h2>十、模板下载技术实现</h2>
+            <pre><code>// src/lib/downloadTemplate.ts
+export const TEMPLATE_FILES = {
+  subtitler: {
+    path: '/templates/后五天问卷调查 给静静.xlsx',
+    filename: '后五天问卷调查 给静静.xlsx',
+  },
+  schedule: {
+    path: '/templates/2024排片表.xlsx',
+    filename: '2024排片表.xlsx',
+  },
+};</code></pre>
+            <p>Vite 将 <code>public/templates/</code> 下的文件原样发布到站点根路径 <code>/templates/...</code>。</p>
+          </section>
+
+          <footer class="doc-footer">
+            <p>用户操作步骤与界面截图见 <a class="inline-nav" data-goto="manual">操作手册</a>（本页内置子页面）。</p>
+          </footer>
+        </main>
+      </div>
+
+      <!-- ========== 操作手册 ========== -->
+      <div id="page-manual" class="doc-page">
+        <main>
+          <header class="doc-header">
+            <h1>SIFF 排班助手 — 截图版操作手册</h1>
+            <p class="meta gold">版本：v1.0.0 · 2026-05-23<br />配套技术文档：<a class="inline-nav" data-goto="tech">技术说明</a></p>
+            <p>本手册按实际界面截图，逐步说明从下载模板到导出排班总表的完整操作流程。</p>
+          </header>
+
+          <section id="manual-start">
+            <h2>1. 快速开始</h2>
+            <p>推荐流程：</p>
+            <div class="diagram">下载模板 → 填写 Excel → 上传两份数据 → 设置规则 → 自动/手动排班 → 导出 Excel</div>
+            <p>左侧导航栏六个入口：</p>
+            <table>
+              <thead><tr><th>菜单</th><th>作用</th></tr></thead>
+              <tbody>
+                <tr><td>仪表盘</td><td>上传数据、下载模板</td></tr>
+                <tr><td>排班编辑</td><td>全局日历/矩阵分配</td></tr>
+                <tr><td>字幕员表</td><td>查看人员可用性</td></tr>
+                <tr><td>电影排片</td><td>查看排片结构</td></tr>
+                <tr><td>排班总表</td><td><strong>主编辑 + 导出</strong></td></tr>
+                <tr><td>设置</td><td>行政区优先级、排班约束</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="manual-step1">
+            <h2>2. Step 1：下载并填写标准模板</h2>
+            <p>打开 <strong>仪表盘</strong>，在「数据导入」卡片底部有两个下载按钮。</p>
+            <figure class="screenshot">
+              <img src="./screenshots/01-dashboard.png" alt="仪表盘 — 数据导入与模板下载" loading="lazy" />
+              <figcaption>仪表盘 — 数据导入与模板下载</figcaption>
+            </figure>
+            <h3>2.1 下载字幕员模板</h3>
+            <ol>
+              <li>点击金色按钮 <strong>「下载字幕员模板」</strong></li>
+              <li>浏览器将下载：<code>后五天问卷调查 给静静.xlsx</code></li>
+              <li>用 Excel 填写或核对：姓名、区域（负责哪个区填 1）、搭档、各日期-时间段列（空白 = 有空，有内容 = 已占用）</li>
+            </ol>
+            <h3>2.2 下载排片表模板</h3>
+            <ol>
+              <li>点击灰色按钮 <strong>「下载排片表模板」</strong></li>
+              <li>浏览器将下载：<code>2024排片表.xlsx</code></li>
+              <li>填写日期、周、影院、影厅及各时间段（08:30 ~ 20:40）的电影信息</li>
+            </ol>
+            <p class="tip"><strong>提示</strong>：模板文件与系统解析逻辑完全匹配，建议直接基于模板修改，避免表头格式不兼容。</p>
+          </section>
+
+          <section id="manual-step2">
+            <h2>3. Step 2：上传数据</h2>
+            <p>仍在仪表盘页面：</p>
+            <figure class="screenshot">
+              <img src="./screenshots/01-dashboard.png" alt="仪表盘 — 已上传状态示例" loading="lazy" />
+              <figcaption>仪表盘 — 已上传状态示例</figcaption>
+            </figure>
+            <h3>3.1 上传字幕员数据</h3>
+            <ol>
+              <li>点击 <strong>「字幕员数据」</strong> 标签（默认选中）</li>
+              <li>将填好的 Excel 拖入虚线框，或点击选择文件</li>
+              <li>解析成功后，底部状态栏显示绿色 ✓ 及文件名</li>
+              <li>弹出提示时可选择跳转到「字幕员表」查看</li>
+            </ol>
+            <h3>3.2 上传电影排片表</h3>
+            <ol>
+              <li>点击 <strong>「电影排片表」</strong> 标签</li>
+              <li>上传 <code>2024排片表.xlsx</code></li>
+              <li>解析成功后，底部显示文件名，可选择跳转到「电影排片」查看</li>
+            </ol>
+            <h3>3.3 对排班总表的影响</h3>
+            <table>
+              <thead><tr><th>上传内容</th><th>总表变化</th></tr></thead>
+              <tbody>
+                <tr><td>排片表</td><td>重建所有 <strong>cells</strong>（场次行），已有分配尽量保留</td></tr>
+                <tr><td>字幕员表</td><td>不改变总表结构，仅影响后续<strong>可选字幕员</strong></td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="manual-step3">
+            <h2>4. Step 3：核对电影排片</h2>
+            <p>进入 <strong>电影排片</strong> 页面：</p>
+            <figure class="screenshot">
+              <img src="./screenshots/02-schedule-table.png" alt="电影排片表" loading="lazy" />
+              <figcaption>电影排片表</figcaption>
+            </figure>
+            <table>
+              <thead><tr><th>区域</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td>顶部日期标签</td><td>点击切换日期（如 6月14日 五）</td></tr>
+                <tr><td>左侧影院列表</td><td>点击选择影院</td></tr>
+                <tr><td>右侧表格</td><td>查看 影厅 × 时间段 的电影信息</td></tr>
+                <tr><td>底部统计</td><td>查看影院数、场次数</td></tr>
+                <tr><td>上传/更新数据</td><td>返回仪表盘重新上传</td></tr>
+              </tbody>
+            </table>
+            <p><strong>与总表关系</strong>：表格中有绿色内容的格子 = 排班总表中对应场次需要分配 2 名字幕员。本页只读，不能直接改排班。</p>
+          </section>
+
+          <section id="manual-step4">
+            <h2>5. Step 4：核对字幕员可用性</h2>
+            <p>进入 <strong>字幕员表</strong> 页面：</p>
+            <figure class="screenshot">
+              <img src="./screenshots/03-subtitler.png" alt="字幕员时间表" loading="lazy" />
+              <figcaption>字幕员时间表</figcaption>
+            </figure>
+            <table>
+              <thead><tr><th>区域</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td>顶部日期标签</td><td>切换 18日、19日… 查看不同日期</td></tr>
+                <tr><td>区域列</td><td>绿色「1」= 负责该区域</td></tr>
+                <tr><td>时间段列</td><td>绿色 = 有空（可分配），有字 = 已占用</td></tr>
+                <tr><td>搭档列</td><td>固定搭档，自动排班时优先配对</td></tr>
+              </tbody>
+            </table>
+            <p><strong>与总表关系</strong>：总表分配时的下拉列表，只显示此处为「绿色空闲」的字幕员。若下拉为空，先回到此页确认该时段是否有人有空。</p>
+          </section>
+
+          <section id="manual-step5">
+            <h2>6. Step 5：配置排班规则（可选）</h2>
+            <p>进入 <strong>设置</strong> 页面：</p>
+            <figure class="screenshot">
+              <img src="./screenshots/06-settings.png" alt="设置 — 行政区优先级" loading="lazy" />
+              <figcaption>设置 — 行政区优先级</figcaption>
+            </figure>
+            <h3>6.1 行政区优先级</h3>
+            <ul>
+              <li>拖动列表调整 11 个区的顺序</li>
+              <li>越靠前，自动排班时越先处理</li>
+              <li>点击 <strong>保存设置</strong> 生效</li>
+            </ul>
+            <h3>6.2 排班大前提条件</h3>
+            <table>
+              <thead><tr><th>设置项</th><th>默认值</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>每天排班限制</td><td>2 场/天</td><td>自动排班生效</td></tr>
+                <tr><td>总场次限制</td><td>5 场/总计</td><td>自动排班生效</td></tr>
+                <tr><td>同一时间段互斥</td><td>开启</td><td>同一人同时只能去一个厅</td></tr>
+                <tr><td>优先时间块多的字幕员</td><td>开启</td><td>优先安排剩余时段少的人</td></tr>
+              </tbody>
+            </table>
+            <p><strong>与总表关系</strong>：仅影响 <strong>自动排班</strong> 的分配结果，手动下拉不受这些上限强制拦截。</p>
+          </section>
+
+          <section id="manual-step6">
+            <h2>7. Step 6：排班编辑（日历/矩阵）</h2>
+            <p>进入 <strong>排班编辑</strong> 页面：</p>
+            <figure class="screenshot">
+              <img src="./screenshots/04-schedule-edit.png" alt="排班编辑 — 日历视图" loading="lazy" />
+              <figcaption>排班编辑 — 日历视图</figcaption>
+            </figure>
+            <h3>7.1 工具栏</h3>
+            <table>
+              <thead><tr><th>按钮</th><th>功能</th></tr></thead>
+              <tbody>
+                <tr><td>切换至矩阵视图</td><td>日历 ↔ 表格两种布局</td></tr>
+                <tr><td>手动排班</td><td>启用下拉编辑</td></tr>
+                <tr><td>只读模式</td><td>禁止修改，仅查看</td></tr>
+                <tr><td>进度统计</td><td>共 N 场 · 已完成 M 场</td></tr>
+              </tbody>
+            </table>
+            <h3>7.2 日历视图</h3>
+            <ul>
+              <li><strong>左侧</strong>：字幕员列表，可 <strong>拖拽</strong> 到右侧场次 → 快速填入字幕员1</li>
+              <li><strong>右侧</strong>：按日期分组的场次卡片</li>
+              <li>每场卡片有两个下拉：<strong>字幕员1</strong>（蓝）、<strong>字幕员2</strong>（绿）</li>
+              <li>双人填完 → 卡片变绿；冲突 → 变红</li>
+            </ul>
+            <h3>7.3 矩阵视图</h3>
+            <p>表格列：日期/时间 | 影片 | 字幕员1 | 字幕员2，适合逐行批量操作。</p>
+            <p><strong>与总表关系</strong>：此处每次选择/拖拽都会 <strong>实时写入排班总表</strong>（<code>assignments</code>），与「排班总表」页完全同步。</p>
+          </section>
+
+          <section id="manual-step7">
+            <h2>8. Step 7：排班总表（主工作区）</h2>
+            <p>进入 <strong>排班总表</strong> 页面 — 这是最终核对与导出的主界面：</p>
+            <figure class="screenshot">
+              <img src="./screenshots/05-schedule-overview.png" alt="排班总表" loading="lazy" />
+              <figcaption>排班总表</figcaption>
+            </figure>
+            <h3>8.1 头部操作</h3>
+            <table>
+              <thead><tr><th>控件</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>手动排班</td><td>表格内出现可编辑下拉</td></tr>
+                <tr><td>自动排班</td><td>切换为只读 + 显示「执行自动排班」按钮</td></tr>
+                <tr><td>清除</td><td>清空所有已分配字幕员（需确认）</td></tr>
+                <tr><td>导出 Excel</td><td>下载完整排班结果</td></tr>
+                <tr><td>执行自动排班</td><td>按规则批量填充（保留已有手动分配）</td></tr>
+              </tbody>
+            </table>
+            <h3>8.2 主体布局</h3>
+            <p>与「电影排片」类似，但表格多了两列：</p>
+            <table>
+              <thead><tr><th>列</th><th>可编辑</th><th>写入总表字段</th></tr></thead>
+              <tbody>
+                <tr><td>影厅 / 时间 / 电影</td><td>否</td><td>—</td></tr>
+                <tr><td>字幕员1</td><td>是（手动模式）</td><td>assignments[key].subtitler1</td></tr>
+                <tr><td>字幕员2</td><td>是（手动模式）</td><td>assignments[key].subtitler2</td></tr>
+              </tbody>
+            </table>
+            <h3>8.3 推荐操作顺序</h3>
+            <ol class="steps">
+              <li>切换 <strong>自动排班</strong> → 点击 <strong>执行自动排班</strong></li>
+              <li>查看头部进度「已分配 X / Y 场」</li>
+              <li>切换 <strong>手动排班</strong> → 逐影院补全未分配场次</li>
+              <li>全部完成后 → <strong>导出 Excel</strong></li>
+            </ol>
+          </section>
+
+          <section id="manual-step8">
+            <h2>9. Step 8：导出结果</h2>
+            <p>在排班总表页点击 <strong>「导出 Excel」</strong>：</p>
+            <ul>
+              <li>文件名：<code>排班总表_YYYYMMDD.xlsx</code></li>
+              <li>每个 festival 日期一个 Sheet</li>
+              <li>列：影院 | 影厅 | 日期 | 星期 | 时间 | 电影 | 字幕员1 | 字幕员2</li>
+              <li>未识别区域的影院行以灰色标记</li>
+            </ul>
+            <p>导出文件即为可交付的最终排班总表。</p>
+          </section>
+
+          <section id="manual-faq">
+            <h2>10. 常见问题</h2>
+            <dl class="faq">
+              <dt>Q：模板下载没反应？</dt>
+              <dd>
+                <ul>
+                  <li>确认使用 Chrome / Edge / Safari 等现代浏览器</li>
+                  <li>检查是否被浏览器拦截下载</li>
+                  <li>开发环境需确保 <code>public/templates/</code> 下两个 xlsx 文件存在</li>
+                </ul>
+              </dd>
+              <dt>Q：上传后排班总表是空的？</dt>
+              <dd>需先上传 <strong>电影排片表</strong>，系统才能生成 cells；仅上传字幕员表不会产生场次。</dd>
+              <dt>Q：下拉列表显示「此时段无空闲字幕员」？</dt>
+              <dd>
+                <ol>
+                  <li>到字幕员表确认该日期、时段是否有绿色格子</li>
+                  <li>确认是否已被同场另一字幕员选中</li>
+                  <li>确认是否已上传字幕员数据</li>
+                </ol>
+              </dd>
+              <dt>Q：排班编辑和排班总表有什么区别？</dt>
+              <dd>
+                <ul>
+                  <li><strong>排班编辑</strong>：全局浏览，支持拖拽，适合宏观分配</li>
+                  <li><strong>排班总表</strong>：按影院逐日核对，支持自动排班和导出</li>
+                  <li>两者操作同一份数据，互通同步</li>
+                </ul>
+              </dd>
+              <dt>Q：刷新页面数据会丢吗？</dt>
+              <dd>不会。数据保存在浏览器 localStorage。清除浏览器缓存会导致丢失。</dd>
+            </dl>
+          </section>
+
+          <section id="manual-appendix">
+            <h2>附录：截图文件清单</h2>
+            <table>
+              <thead><tr><th>文件</th><th>页面</th></tr></thead>
+              <tbody>
+                <tr><td><code>screenshots/01-dashboard.png</code></td><td>仪表盘</td></tr>
+                <tr><td><code>screenshots/02-schedule-table.png</code></td><td>电影排片</td></tr>
+                <tr><td><code>screenshots/03-subtitler.png</code></td><td>字幕员表</td></tr>
+                <tr><td><code>screenshots/04-schedule-edit.png</code></td><td>排班编辑</td></tr>
+                <tr><td><code>screenshots/05-schedule-overview.png</code></td><td>排班总表</td></tr>
+                <tr><td><code>screenshots/06-settings.png</code></td><td>设置</td></tr>
+              </tbody>
+            </table>
+            <h3>重新生成演示截图</h3>
+            <p>如需在本地重新生成带数据的截图，可运行：</p>
+            <pre><code>npx tsx scripts/seed-demo-storage.mjs</code></pre>
+            <p>然后在浏览器控制台注入 <code>docs/demo-localStorage.json</code> 中的键值，或使用项目内置模板上传流程。</p>
+          </section>
+
+          <footer class="doc-footer">
+            <p>开发与架构说明见 <a class="inline-nav" data-goto="tech">技术说明</a>（本页内置子页面）。</p>
+          </footer>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var PAGES = { tech: 'page-tech', manual: 'page-manual' };
+      var TOC = { tech: 'toc-tech', manual: 'toc-manual' };
+      var BTN = { tech: 'btn-tech', manual: 'btn-manual' };
+
+      function getPageFromHash() {
+        var h = (location.hash || '').slice(1);
+        if (!h || h.indexOf('tech') === 0) return 'tech';
+        if (h.indexOf('manual') === 0) return 'manual';
+        return 'tech';
+      }
+
+      function showPage(name, anchor) {
+        name = name === 'manual' ? 'manual' : 'tech';
+        document.querySelectorAll('.doc-page').forEach(function (el) {
+          el.classList.toggle('active', el.id === PAGES[name]);
+        });
+        document.querySelectorAll('.toc-panel').forEach(function (el) {
+          el.classList.toggle('active', el.id === TOC[name]);
+        });
+        Object.keys(BTN).forEach(function (k) {
+          var b = document.getElementById(BTN[k]);
+          if (b) {
+            var on = k === name;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+          }
+        });
+        document.title = name === 'manual'
+          ? 'SIFF 排班助手 — 操作手册'
+          : 'SIFF 排班助手 — 技术说明文档';
+        if (anchor) {
+          var target = document.getElementById(anchor);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          window.scrollTo(0, 0);
+        }
+      }
+
+      function navigate(name, anchor) {
+        var hash = anchor ? '#' + anchor : (name === 'manual' ? '#manual' : '#tech');
+        if (location.hash !== hash) location.hash = hash;
+        else showPage(name, anchor);
+      }
+
+      function onHashChange() {
+        var raw = (location.hash || '#tech').slice(1) || 'tech';
+        var page = raw.indexOf('manual') === 0 ? 'manual' : 'tech';
+        showPage(page, raw);
+      }
+
+      document.getElementById('btn-tech').addEventListener('click', function () { navigate('tech'); });
+      document.getElementById('btn-manual').addEventListener('click', function () { navigate('manual'); });
+
+      document.querySelectorAll('[data-goto]').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+          e.preventDefault();
+          navigate(el.getAttribute('data-goto'));
+        });
+      });
+
+      document.querySelectorAll('nav.toc a[data-page]').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          var page = a.getAttribute('data-page');
+          var href = a.getAttribute('href') || '';
+          var anchor = href.charAt(0) === '#' ? href.slice(1) : '';
+          if (page) {
+            e.preventDefault();
+            navigate(page, anchor);
+          }
+        });
+      });
+
+      window.addEventListener('hashchange', onHashChange);
+      onHashChange();
+    })();
+  </script>
+</body>
+</html>

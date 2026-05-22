@@ -26,7 +26,7 @@ export function SubtitlerProvider({ children }: { children: ReactNode }) {
       const savedData = localStorage.getItem(STORAGE_KEY);
       const savedFileName = localStorage.getItem(FILE_NAME_KEY);
       
-      if (savedData && savedFileName) {
+      if (savedData) {
         const parsed = JSON.parse(savedData);
         if (parsed?.rows?.length > 0) {
           setSubtitlerDataState(parsed);
@@ -73,7 +73,11 @@ export function SubtitlerProvider({ children }: { children: ReactNode }) {
 
   // 在初始化完成前不渲染children，避免闪烁
   if (!isInitialized) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#2B3A67] text-white text-sm">
+        加载字幕员数据…
+      </div>
+    );
   }
 
   return (

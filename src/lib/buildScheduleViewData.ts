@@ -8,7 +8,14 @@ export interface ScheduleViewItem {
   date: string;
   time: string;
   film: string;
+  movieName: string;
+  cinema: string;
+  hall: string;
   staff: string;
+  subtitler1: string | null;
+  subtitler2: string | null;
+  subtitler1Id: string | null;
+  subtitler2Id: string | null;
   status: 'available' | 'assigned' | 'conflict';
 }
 
@@ -56,6 +63,31 @@ export function buildScheduleTableFromParsedData(
   return { cells, assignments };
 }
 
+export function syncScheduleTableWithParsedData(
+  scheduleData: ParsedScheduleTable,
+  existing: ScheduleTable | null
+): ScheduleTable {
+  const fresh = buildScheduleTableFromParsedData(scheduleData);
+  if (!existing) return fresh;
+
+  const mergedAssignments = { ...fresh.assignments };
+  const mergedSources: ScheduleTable['assignmentSources'] = {};
+  Object.keys(mergedAssignments).forEach(key => {
+    if (existing.assignments[key]) {
+      mergedAssignments[key] = existing.assignments[key];
+      if (existing.assignmentSources?.[key]) {
+        mergedSources[key] = existing.assignmentSources[key];
+      }
+    }
+  });
+
+  return {
+    cells: fresh.cells,
+    assignments: mergedAssignments,
+    assignmentSources: mergedSources,
+  };
+}
+
 function getPrimaryDistrict(row: SubtitlerRow): string {
   const entry = Object.entries(row.districts).find(([, value]) => value);
   return entry ? `${entry[0]}区` : '未指定';
@@ -95,7 +127,14 @@ export function buildScheduleViewData(
         date: cell.date,
         time: cell.timeSlot,
         film: `${cell.movieName} · ${cell.cinema} ${cell.hall}`,
+        movieName: cell.movieName,
+        cinema: cell.cinema,
+        hall: cell.hall,
         staff: staffId,
+        subtitler1: assignment.subtitler1,
+        subtitler2: assignment.subtitler2,
+        subtitler1Id: assignment.subtitler1Id,
+        subtitler2Id: assignment.subtitler2Id,
         status: 'available' as const,
       };
     });
@@ -111,8 +150,10 @@ export function buildScheduleViewData(
     ...item,
     status: conflictIds.has(item.id)
       ? 'conflict'
-      : item.staff
+      : item.subtitler1 && item.subtitler2
         ? 'assigned'
-        : 'available',
+        : item.subtitler1 || item.subtitler2
+          ? 'assigned'
+          : 'available',
   }));
 }

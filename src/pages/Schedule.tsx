@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -10,24 +10,48 @@ import MatrixView from "@/components/schedule/MatrixView";
 import { useScheduleTable } from "@/contexts/ScheduleTableContext";
 import { useSubtitler } from "@/contexts/SubtitlerContext";
 import { useSchedule } from "@/contexts/ScheduleContext";
+import { ScheduleAssignment } from "@/contexts/ScheduleContext";
+import { useScheduleTableSync } from "@/hooks/useScheduleTableSync";
 import {
-  buildScheduleTableFromParsedData,
   buildScheduleViewData,
   buildStaffViewData,
+  buildScheduleTableFromParsedData,
 } from "@/lib/buildScheduleViewData";
+import { getAvailableSubtitlers } from "@/lib/scheduleHelpers";
+import { cn } from "@/lib/utils";
+import { useAutoSchedule } from "@/hooks/useAutoSchedule";
+import AutoScheduleReportPanel from "@/components/schedule/AutoScheduleReportPanel";
+
 export default function SchedulePage() {
   const navigate = useNavigate();
   const { scheduleData } = useScheduleTable();
   const { subtitlerData } = useSubtitler();
-  const { scheduleTable, setScheduleTable, updateAssignment, getAssignment } = useSchedule();
+  const {
+    scheduleTable,
+    mode,
+    setMode,
+    updateAssignment,
+    getAssignment,
+    undo,
+    canUndo,
+    clearAllAssignments,
+  } = useSchedule();
+
+  useScheduleTableSync();
+
+  const effectiveScheduleTable = useMemo(() => {
+    if (scheduleTable?.cells?.length) return scheduleTable;
+    if (scheduleData) return buildScheduleTableFromParsedData(scheduleData);
+    return null;
+  }, [scheduleTable, scheduleData]);
+
+  const { isAutoScheduling, lastReport, runAutoSchedule, clearReport } = useAutoSchedule(
+    effectiveScheduleTable,
+    subtitlerData,
+    updateAssignment
+  );
 
   const [viewMode, setViewMode] = useState<"calendar" | "matrix">("calendar");
-
-  useEffect(() => {
-    if (scheduleData && !scheduleTable) {
-      setScheduleTable(buildScheduleTableFromParsedData(scheduleData));
-    }
-  }, [scheduleData, scheduleTable, setScheduleTable]);
 
   const staffData = useMemo(
     () => (subtitlerData ? buildStaffViewData(subtitlerData) : []),
@@ -35,8 +59,11 @@ export default function SchedulePage() {
   );
 
   const scheduleViewData = useMemo(
-    () => (scheduleTable ? buildScheduleViewData(scheduleTable) : []),
-    [scheduleTable]
+    () =>
+      effectiveScheduleTable
+        ? buildScheduleViewData(effectiveScheduleTable)
+        : [],
+    [effectiveScheduleTable]
   );
 
   const groupedScheduleData = useMemo(() => {
@@ -49,6 +76,30 @@ export default function SchedulePage() {
     }, {} as Record<string, typeof scheduleViewData>);
   }, [scheduleViewData]);
 
+  const getAvailableSubtitlersForSlot = useCallback((
+    subtitlerTimeSlot: string,
+    assignedSubtitlers: string[],
+    date: string
+  ) => {
+    return getAvailableSubtitlers(subtitlerData, subtitlerTimeSlot, assignedSubtitlers, date);
+  }, [subtitlerData]);
+
+  const handleAssignmentChange = useCallback((
+    cellKey: string,
+    field: 'subtitler1' | 'subtitler2',
+    value: string | null
+  ) => {
+    const current = getAssignment(cellKey);
+    const assignment: ScheduleAssignment = {
+      ...current,
+      [field]: value,
+      [`${field}Id`]: value
+        ? subtitlerData?.rows.find(r => r.name === value)?.id || null
+        : null,
+    };
+    updateAssignment(cellKey, assignment, { source: 'manual' });
+  }, [getAssignment, updateAssignment, subtitlerData]);
+
   const handleAssignStaff = useCallback((scheduleId: string, staffId: string) => {
     const staff = staffData.find(s => s.id === staffId);
     if (!staff) return;
@@ -58,21 +109,16 @@ export default function SchedulePage() {
       ...current,
       subtitler1: staff.name,
       subtitler1Id: staffId,
-    });
+    }, { source: 'manual' });
   }, [staffData, getAssignment, updateAssignment]);
-
-  const handleUnassignStaff = useCallback((scheduleId: string) => {
-    const current = getAssignment(scheduleId);
-    updateAssignment(scheduleId, {
-      ...current,
-      subtitler1: null,
-      subtitler1Id: null,
-    });
-  }, [getAssignment, updateAssignment]);
 
   const toggleViewMode = () => {
     setViewMode(prev => (prev === "calendar" ? "matrix" : "calendar"));
   };
+
+  const assignedCount = scheduleViewData.filter(
+    item => item.subtitler1 && item.subtitler2
+  ).length;
 
   if (!scheduleData) {
     return (
@@ -109,13 +155,13 @@ export default function SchedulePage() {
               {!subtitlerData && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm">
                   <i className="fa-solid fa-triangle-exclamation mr-2"></i>
-                  尚未上传字幕员数据，拖拽分配功能不可用。请先在仪表盘上传字幕员表。
+                  尚未上传字幕员数据，分配功能不可用。请先在仪表盘上传字幕员表。
                 </div>
               )}
 
               <div className="bg-white rounded-lg p-4 shadow-lg text-gray-800">
-                <div className="flex justify-between items-center">
-                  <div className="flex space-x-4">
+                <div className="flex justify-between items-center flex-wrap gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
                     <button
                       onClick={toggleViewMode}
                       className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-white font-medium py-2 px-4 rounded transition-colors"
@@ -123,13 +169,84 @@ export default function SchedulePage() {
                       <i className="fa-solid fa-rotate mr-2"></i>
                       {viewMode === "calendar" ? "切换至矩阵视图" : "切换至日历视图"}
                     </button>
+                    <button
+                      onClick={undo}
+                      disabled={!canUndo || mode !== 'manual'}
+                      className={cn(
+                        "px-3 py-2 rounded text-sm font-medium border transition-colors",
+                        canUndo && mode === 'manual'
+                          ? "border-gray-300 text-gray-700 hover:bg-gray-50"
+                          : "border-gray-200 text-gray-400 cursor-not-allowed"
+                      )}
+                      title="撤回上一步分配修改"
+                    >
+                      <i className="fa-solid fa-rotate-left mr-1"></i>
+                      撤回上一步
+                    </button>
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setMode('manual')}
+                        className={cn(
+                          "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                          mode === 'manual'
+                            ? 'bg-white text-[#2B3A67] shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        )}
+                      >
+                        手动排班
+                      </button>
+                      <button
+                        onClick={() => setMode('auto')}
+                        className={cn(
+                          "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                          mode === 'auto'
+                            ? 'bg-white text-[#2B3A67] shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        )}
+                      >
+                        <i className="fa-solid fa-wand-magic-sparkles mr-1"></i>
+                        自动排班
+                      </button>
+                    </div>
+                    {mode === 'auto' && (
+                      <>
+                        <button
+                          onClick={runAutoSchedule}
+                          disabled={isAutoScheduling || !subtitlerData}
+                          className={cn(
+                            "px-4 py-2 rounded text-white text-sm font-medium",
+                            isAutoScheduling || !subtitlerData
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-green-600 hover:bg-green-700"
+                          )}
+                        >
+                          <i className={cn("fa-solid mr-1", isAutoScheduling ? "fa-spinner fa-spin" : "fa-play")}></i>
+                          {isAutoScheduling ? "排班中..." : "执行自动排班"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm("确定清除所有排班分配吗？")) {
+                              clearAllAssignments();
+                              clearReport();
+                            }
+                          }}
+                          className="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50"
+                        >
+                          清除分配
+                        </button>
+                      </>
+                    )}
                   </div>
                   <div className="text-sm text-gray-500">
-                    共 {scheduleViewData.length} 场 · 已分配{" "}
-                    {scheduleViewData.filter(item => item.staff).length} 场
+                    共 {scheduleViewData.length} 场 · 已完成 {assignedCount} 场
+                    <span className="text-gray-400 ml-2">（与排班总表同步保存）</span>
                   </div>
                 </div>
               </div>
+
+              {lastReport && mode === 'auto' && (
+                <AutoScheduleReportPanel report={lastReport} onClose={clearReport} />
+              )}
 
               <div className="bg-white rounded-lg p-6 shadow-lg min-h-[600px]">
                 {scheduleViewData.length === 0 ? (
@@ -148,16 +265,21 @@ export default function SchedulePage() {
                       {viewMode === "calendar" ? (
                         <CalendarView
                           data={groupedScheduleData}
+                          allSlots={scheduleViewData}
                           staffData={staffData}
+                          mode={mode}
                           onAssign={handleAssignStaff}
-                          onUnassign={handleUnassignStaff}
+                          onAssignmentChange={handleAssignmentChange}
+                          getAvailableSubtitlers={getAvailableSubtitlersForSlot}
                         />
                       ) : (
                         <MatrixView
                           data={scheduleViewData}
+                          allSlots={scheduleViewData}
                           staffData={staffData}
-                          onAssign={handleAssignStaff}
-                          onUnassign={handleUnassignStaff}
+                          mode={mode}
+                          onAssignmentChange={handleAssignmentChange}
+                          getAvailableSubtitlers={getAvailableSubtitlersForSlot}
                         />
                       )}
                     </motion.div>

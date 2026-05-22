@@ -53,9 +53,11 @@ export function ScheduleTableProvider({ children }: { children: ReactNode }) {
       const savedData = localStorage.getItem(STORAGE_KEY);
       const savedFileName = localStorage.getItem(FILE_NAME_KEY);
       
-      if (savedData && savedFileName) {
+      if (savedData) {
         const parsed = JSON.parse(savedData);
-        setScheduleDataState(parsed);
+        if (parsed?.rows?.length) {
+          setScheduleDataState(parsed);
+        }
       }
       if (savedFileName) {
         setUploadedFileNameState(savedFileName);
@@ -93,7 +95,11 @@ export function ScheduleTableProvider({ children }: { children: ReactNode }) {
   };
 
   if (!isInitialized) {
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#2B3A67] text-white text-sm">
+        加载排片数据…
+      </div>
+    );
   }
 
   return (

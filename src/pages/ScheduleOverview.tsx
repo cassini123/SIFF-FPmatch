@@ -5,8 +5,12 @@ import { useScheduleTable } from '@/contexts/ScheduleTableContext';
 import { useSubtitler } from '@/contexts/SubtitlerContext';
 import { useSchedule } from '@/contexts/ScheduleContext';
 import { ScheduleCell, ScheduleAssignment } from '@/contexts/ScheduleContext';
-import { autoSchedule } from '@/lib/autoSchedule';
-import { buildScheduleTableFromParsedData } from '@/lib/buildScheduleViewData';
+import { buildScheduleViewData } from '@/lib/buildScheduleViewData';
+import { useScheduleTableSync } from '@/hooks/useScheduleTableSync';
+import { useAutoSchedule } from '@/hooks/useAutoSchedule';
+import AutoScheduleReportPanel from '@/components/schedule/AutoScheduleReportPanel';
+import StaffAssignmentPanel from '@/components/schedule/StaffAssignmentPanel';
+import SubtitlerSelect from '@/components/schedule/SubtitlerSelect';
 import { TIME_MAPPING, getCinemaDistrict } from '@/lib/scheduleConstants';
 import { formatDateDisplay, getWeekDay } from '@/lib/parseScheduleTable';
 import { cn } from '@/lib/utils';
@@ -47,95 +51,12 @@ function convertToSubtitlerDate(dateStr: string): string {
   return dateStr;
 }
 
-// 字幕员下拉选项组件
-function SubtitlerSelect({
-  value,
-  onChange,
-  availableSubtitlers,
-  disabled,
-}: {
-  value: string | null;
-  onChange: (name: string | null) => void;
-  availableSubtitlers: { id: string; name: string }[];
-  disabled?: boolean;
-}) {
-  const [search, setSearch] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-
-  const filteredSubtitlers = useMemo(() => {
-    if (!search) return availableSubtitlers;
-    return availableSubtitlers.filter(s => 
-      s.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [availableSubtitlers, search]);
-
-  return (
-    <div className="relative">
-      <div
-        className={cn(
-          "border rounded px-2 py-1 text-xs cursor-pointer min-w-[80px]",
-          disabled ? "bg-gray-100 cursor-not-allowed opacity-75" : "hover:border-gray-400",
-          value ? "bg-blue-50 border-blue-300" : "bg-white border-gray-300"
-        )}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-      >
-        {value || '-'}
-      </div>
-      
-      {isOpen && !disabled && (
-        <div className="absolute z-50 top-full left-0 mt-1 bg-white border rounded-lg shadow-lg w-44 max-h-60 overflow-hidden">
-          <div className="p-2 border-b">
-            <input
-              type="text"
-              placeholder="搜索..."
-              className="w-full px-2 py-1 text-sm border rounded"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            {filteredSubtitlers.length === 0 ? (
-              <div className="p-2 text-sm text-gray-500 text-center">此时段无空闲字幕员</div>
-            ) : (
-              filteredSubtitlers.map(subtitler => (
-                <div
-                  key={subtitler.id}
-                  className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer"
-                  onClick={() => {
-                    onChange(subtitler.name);
-                    setIsOpen(false);
-                    setSearch('');
-                  }}
-                >
-                  {subtitler.name}
-                </div>
-              ))
-            )}
-          </div>
-          <div 
-            className="p-2 text-sm text-red-500 hover:bg-red-50 cursor-pointer border-t text-center"
-            onClick={() => {
-              onChange(null);
-              setIsOpen(false);
-              setSearch('');
-            }}
-          >
-            清除
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function ScheduleOverview() {
   const navigate = useNavigate();
   const { scheduleData } = useScheduleTable();
   const { subtitlerData } = useSubtitler();
   const { 
     scheduleTable, 
-    setScheduleTable, 
     mode, 
     setMode, 
     updateAssignment,
@@ -143,18 +64,41 @@ export default function ScheduleOverview() {
     clearAllAssignments 
   } = useSchedule();
 
+  useScheduleTableSync();
+
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedCinema, setSelectedCinema] = useState<string>('');
-  const [isAutoScheduling, setIsAutoScheduling] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'cinema' | 'subtitler'>('cinema');
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
-  // 初始化排班表
-  useEffect(() => {
-    if (scheduleData) {
-      setScheduleTable(buildScheduleTableFromParsedData(scheduleData));
-    } else {
-      setScheduleTable(null);
-    }
-  }, [scheduleData, setScheduleTable]);
+  const { isAutoScheduling, lastReport, runAutoSchedule, clearReport } = useAutoSchedule(
+    scheduleTable,
+    subtitlerData,
+    updateAssignment
+  );
+
+  const scheduleViewData = useMemo(
+    () => (scheduleTable ? buildScheduleViewData(scheduleTable) : []),
+    [scheduleTable]
+  );
+
+  const staffList = useMemo(() => {
+    if (!subtitlerData) return [];
+    return subtitlerData.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      district: Object.entries(row.districts).find(([, v]) => v)?.[0] ?? '未指定',
+      languages: row.partner ? [`搭档: ${row.partner}`] : [],
+    }));
+  }, [subtitlerData]);
+
+  const selectedStaff = staffList.find(s => s.id === selectedStaffId) ?? null;
+  const selectedStaffAssignments = useMemo(() => {
+    if (!selectedStaffId) return [];
+    return scheduleViewData.filter(
+      s => s.subtitler1Id === selectedStaffId || s.subtitler2Id === selectedStaffId
+    );
+  }, [scheduleViewData, selectedStaffId]);
 
   // 设置默认选中
   useEffect(() => {
@@ -271,67 +215,11 @@ export default function ScheduleOverview() {
     updateAssignment(cellKey, assignment);
   }, [getAssignment, updateAssignment, subtitlerData]);
 
-  // 执行自动排班
-  const handleAutoSchedule = useCallback(() => {
-    if (!scheduleTable || !subtitlerData) {
-      toast.error('缺少排班数据或字幕员数据');
-      return;
-    }
-
-    setIsAutoScheduling(true);
-    const loadingToast = toast.loading('正在执行自动排班...');
-
-    setTimeout(() => {
-      try {
-        console.log('=== 自动排班开始 ===');
-        console.log('字幕员数据行数:', subtitlerData.rows.length);
-        console.log('排班单元格数:', scheduleTable.cells.length);
-        
-        const manualAssignments = new Map<string, ScheduleAssignment>();
-        Object.entries(scheduleTable.assignments).forEach(([key, assignment]) => {
-          if (assignment.subtitler1 || assignment.subtitler2) {
-            manualAssignments.set(key, assignment);
-          }
-        });
-        console.log('手动分配数:', manualAssignments.size);
-
-        const result = autoSchedule(scheduleTable, subtitlerData, manualAssignments);
-        console.log('自动排班结果数:', result.size);
-        
-        // 输出前几个结果看看
-        let count = 0;
-        result.forEach((assignment, key) => {
-          if (count < 3) {
-            console.log(`结果 ${key}:`, assignment);
-            count++;
-          }
-        });
-
-        result.forEach((assignment, key) => {
-          updateAssignment(key, assignment);
-        });
-
-        setIsAutoScheduling(false);
-        toast.dismiss(loadingToast);
-        
-        const assignedCount = Array.from(result.values()).filter(
-          a => a.subtitler1 && a.subtitler2
-        ).length;
-        
-        toast.success(`自动排班完成！已分配 ${assignedCount} / ${scheduleTable.cells.length} 场`);
-      } catch (error) {
-        console.error('自动排班出错:', error);
-        setIsAutoScheduling(false);
-        toast.dismiss(loadingToast);
-        toast.error('自动排班执行出错');
-      }
-    }, 500);
-  }, [scheduleTable, subtitlerData, updateAssignment]);
-
   // 清除所有分配
   const handleClearAll = useCallback(() => {
     if (window.confirm('确定要清除所有排班分配吗？')) {
       clearAllAssignments();
+      clearReport();
       toast.success('已清除所有分配');
     }
   }, [clearAllAssignments]);
@@ -570,7 +458,7 @@ export default function ScheduleOverview() {
               </button>
               {mode === 'auto' && (
                 <button
-                  onClick={handleAutoSchedule}
+                  onClick={runAutoSchedule}
                   disabled={isAutoScheduling}
                   className={cn(
                     "px-4 py-2 rounded text-white text-sm",
@@ -608,18 +496,63 @@ export default function ScheduleOverview() {
             );
           })}
         </div>
+
+        {lastReport && mode === 'auto' && (
+          <div className="mt-4">
+            <AutoScheduleReportPanel report={lastReport} onClose={clearReport} />
+          </div>
+        )}
       </div>
 
       {/* 主体内容 */}
       <div className="flex-1 overflow-hidden flex">
-        {/* 左侧：影院列表 */}
-        <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
-          <div className="p-3 border-b border-gray-200 bg-gray-50">
-            <h3 className="font-semibold text-gray-700">影院列表</h3>
+        {/* 左侧：影院 / 字幕员 */}
+        <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto flex flex-col">
+          <div className="p-2 border-b border-gray-200 bg-gray-50 flex gap-1">
+            <button
+              type="button"
+              onClick={() => setSidebarTab('cinema')}
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium rounded',
+                sidebarTab === 'cinema' ? 'bg-[#D4AF37] text-white' : 'text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              影院
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarTab('subtitler')}
+              className={cn(
+                'flex-1 py-1.5 text-xs font-medium rounded',
+                sidebarTab === 'subtitler' ? 'bg-[#D4AF37] text-white' : 'text-gray-600 hover:bg-gray-100'
+              )}
+            >
+              字幕员
+            </button>
           </div>
-          <div className="py-2">
-            {/* 先渲染有区域的影院，再渲染无区域的影院（灰色） */}
-            {(() => {
+          <div className="py-2 flex-1 overflow-y-auto">
+            {sidebarTab === 'subtitler' ? (
+              staffList.map(staff => (
+                <button
+                  key={staff.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedStaffId(prev => (prev === staff.id ? null : staff.id))
+                  }
+                  className={cn(
+                    'w-full text-left px-4 py-2.5 transition-colors',
+                    selectedStaffId === staff.id
+                      ? 'bg-[#D4AF37]/10 text-[#D4AF37] border-l-4 border-[#D4AF37]'
+                      : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'
+                  )}
+                >
+                  <div className="font-medium truncate">{staff.name}</div>
+                  <div className="text-xs text-gray-400 truncate">{staff.district}</div>
+                </button>
+              ))
+            ) : (
+            /* 先渲染有区域的影院，再渲染无区域的影院（灰色） */
+            (() => {
               const knownCinemas = scheduleData.cinemas.filter(c => getCinemaDistrict(c) !== null);
               const unknownCinemas = scheduleData.cinemas.filter(c => getCinemaDistrict(c) === null);
               return (
@@ -661,12 +594,19 @@ export default function ScheduleOverview() {
                   )}
                 </>
               );
-            })()}
+            })()
+            )}
           </div>
         </div>
 
         {/* 右侧：排班表格 */}
         <div className="flex-1 overflow-auto p-4">
+          {selectedStaff && (
+            <StaffAssignmentPanel
+              staff={selectedStaff}
+              assignments={selectedStaffAssignments}
+            />
+          )}
           {/* 影厅标签 */}
           <div className="flex gap-2 mb-4 flex-wrap">
             {hallsByCinema.map(hall => (
@@ -766,6 +706,7 @@ export default function ScheduleOverview() {
                                 onChange={(value) => handleAssignmentChange(key, 'subtitler1', value)}
                                 availableSubtitlers={availableForSubtitler1}
                                 disabled={mode === 'auto'}
+                                onInspect={(s) => setSelectedStaffId(s.id)}
                               />
                             ) : (
                               <span className={cn(
@@ -786,6 +727,7 @@ export default function ScheduleOverview() {
                                 onChange={(value) => handleAssignmentChange(key, 'subtitler2', value)}
                                 availableSubtitlers={availableForSubtitler2}
                                 disabled={mode === 'auto'}
+                                onInspect={(s) => setSelectedStaffId(s.id)}
                               />
                             ) : (
                               <span className={cn(
