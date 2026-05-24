@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ParsedSchedule, getDateDisplay } from '@/lib/parseSubtitlerExcel';
+import { SUBTITLER_TIME_SLOTS } from '@/lib/scheduleConstants';
 import { useSubtitler } from '@/contexts/SubtitlerContext';
 
 export default function SubtitlerSchedule() {
@@ -69,7 +70,7 @@ export default function SubtitlerSchedule() {
     timeSlots: scheduleData.dates.length ? (Object.keys(scheduleData.rows[0]?.schedule?.[scheduleData.dates[0]] ?? {}) as string[]) : [],
     districts: [],
   };
-  const timeSlots = headers.timeSlots?.length ? headers.timeSlots : ['9:00', '10:30', '13:00', '14:00', '15:00', '17:00', '18:30', '20:40', '23:00'];
+  const timeSlots = headers.timeSlots?.length ? headers.timeSlots : SUBTITLER_TIME_SLOTS;
   const districts = headers.districts ?? [];
   const showDistricts = districts.length > 0;
 

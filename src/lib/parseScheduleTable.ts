@@ -5,8 +5,7 @@ import {
   ParsedScheduleTable 
 } from '@/contexts/ScheduleTableContext';
 
-// 时间段表头映射
-const TIME_SLOTS = ['08:30', '09:30', '10:00', '10:30', '13:00', '15:30', '18:00', '18:30', '20:40'];
+const FIXED_HEADERS = ['日期', '周', '影院', '影厅'] as const;
 
 function formatScheduleDate(value: unknown): string {
   if (value === null || value === undefined || value === '') return '';
@@ -37,6 +36,86 @@ function formatScheduleDate(value: unknown): string {
 function cellString(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value).trim();
+}
+
+/** 将表头单元格解析为 HH:MM 时间段 */
+export function parseTimeSlotHeader(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (typeof value === 'number') {
+  // Excel 时间序列（0~1 表示一天内的时间）
+    if (value >= 0 && value < 1) {
+      const totalMinutes = Math.round(value * 24 * 60);
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    // Excel 日期序列号不应出现在时间列
+    if (value >= 1) return null;
+  }
+
+  if (value instanceof Date) {
+    return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+  }
+
+  const text = String(value).trim().replace(/：/g, ':');
+  const match = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (match) {
+    return `${match[1].padStart(2, '0')}:${match[2]}`;
+  }
+
+  return null;
+}
+
+function timeSlotToMinutes(timeSlot: string): number {
+  const match = timeSlot.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return 0;
+  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+}
+
+function sortTimeSlots(timeSlots: string[]): string[] {
+  return [...timeSlots].sort((a, b) => timeSlotToMinutes(a) - timeSlotToMinutes(b));
+}
+
+function findScheduleHeaderRow(rawData: unknown[][]): number {
+  for (let rowIdx = 0; rowIdx < Math.min(10, rawData.length); rowIdx++) {
+    const row = rawData[rowIdx] || [];
+    const h0 = cellString(row[0]);
+    const h2 = cellString(row[2]);
+    const h3 = cellString(row[3]);
+    if (h0.includes('日期') && h2.includes('影院') && h3.includes('影厅')) {
+      return rowIdx;
+    }
+  }
+  return -1;
+}
+
+function parseTimeSlotColumns(headerRow: unknown[]): { col: number; timeSlot: string }[] {
+  const cols: { col: number; timeSlot: string }[] = [];
+  for (let col = 4; col < headerRow.length; col++) {
+    const timeSlot = parseTimeSlotHeader(headerRow[col]);
+    if (timeSlot) {
+      cols.push({ col, timeSlot });
+    }
+  }
+  return cols;
+}
+
+function findScheduleWorksheet(workbook: XLSX.WorkBook): XLSX.WorkSheet {
+  for (const sheetName of workbook.SheetNames) {
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet?.['!ref']) continue;
+    const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
+    if (findScheduleHeaderRow(rawData) >= 0) {
+      return worksheet;
+    }
+  }
+
+  const fallback = workbook.Sheets[workbook.SheetNames[0]];
+  if (!fallback) {
+    throw new Error('Excel 文件中没有可用的工作表');
+  }
+  return fallback;
 }
 
 // 解析电影场次数据
@@ -93,8 +172,7 @@ export async function parseScheduleTableFromUrl(url: string): Promise<ParsedSche
     
     const arrayBuffer = await response.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
+    const worksheet = findScheduleWorksheet(workbook);
     const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as string[][];
     
     return parseScheduleData(rawData);
@@ -109,8 +187,7 @@ export async function parseScheduleTableFromFile(file: File): Promise<ParsedSche
   try {
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
+    const worksheet = findScheduleWorksheet(workbook);
     const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as string[][];
     const parsed = parseScheduleData(rawData);
     if (parsed.rows.length === 0) {
@@ -125,13 +202,25 @@ export async function parseScheduleTableFromFile(file: File): Promise<ParsedSche
 
 // 解析排片数据
 function parseScheduleData(rawData: string[][]): ParsedScheduleTable {
+  const headerRowIdx = findScheduleHeaderRow(rawData);
+  if (headerRowIdx < 0) {
+    throw new Error(`未能识别排片表表头，请确认前四列为：${FIXED_HEADERS.join('、')}`);
+  }
+
+  const headerRow = rawData[headerRowIdx] || [];
+  const timeColumns = parseTimeSlotColumns(headerRow);
+  if (timeColumns.length === 0) {
+    throw new Error('未能从表头读取时间段列，请确认「影厅」列之后为 HH:MM 格式的时间表头');
+  }
+
+  const timeSlots = sortTimeSlots(timeColumns.map(c => c.timeSlot));
+
   const rows: ScheduleRow[] = [];
   const datesSet = new Set<string>();
   const cinemasSet = new Set<string>();
   const hallsSet = new Set<string>();
   
-  // 跳过表头，从第2行开始
-  for (let rowIdx = 1; rowIdx < rawData.length; rowIdx++) {
+  for (let rowIdx = headerRowIdx + 1; rowIdx < rawData.length; rowIdx++) {
     const row = rawData[rowIdx];
     
     // 跳过空行
@@ -148,12 +237,12 @@ function parseScheduleData(rawData: string[][]): ParsedScheduleTable {
     cinemasSet.add(cinema);
     hallsSet.add(hall);
     
-    // 解析各时间段的排片
     const shows: { [timeSlot: string]: MovieShow | null } = {};
-    for (let i = 0; i < TIME_SLOTS.length; i++) {
-      const timeSlot = TIME_SLOTS[i];
-      const colIdx = i + 4; // 时间段从第5列开始（索引4）
-      const rawValue = cellString(row[colIdx]);
+    for (const slot of timeSlots) {
+      shows[slot] = null;
+    }
+    for (const { col, timeSlot } of timeColumns) {
+      const rawValue = cellString(row[col]);
       shows[timeSlot] = parseMovieShow(rawValue);
     }
     
@@ -170,7 +259,7 @@ function parseScheduleData(rawData: string[][]): ParsedScheduleTable {
     dates: Array.from(datesSet).sort(),
     cinemas: Array.from(cinemasSet).sort(),
     halls: Array.from(hallsSet).sort(),
-    timeSlots: TIME_SLOTS,
+    timeSlots,
     rows
   };
 }
