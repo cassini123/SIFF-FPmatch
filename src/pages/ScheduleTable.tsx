@@ -52,6 +52,26 @@ export default function ScheduleTable() {
     );
   }, [scheduleData, selectedDate, selectedCinema]);
 
+  // 全表影厅数（按影院+影厅去重，避免不同影院同名影厅被合并）
+  const totalHallCount = useMemo(() => {
+    if (!scheduleData) return 0;
+    const keys = new Set<string>();
+    scheduleData.rows.forEach(row => {
+      keys.add(`${row.cinema}|${row.hall}`);
+    });
+    return keys.size;
+  }, [scheduleData]);
+
+  // 当前日期全部场次的实际排片数（非空时间段）
+  const screeningsOnSelectedDate = useMemo(() => {
+    if (!scheduleData || !selectedDate) return 0;
+    return scheduleData.rows
+      .filter(row => row.date === selectedDate)
+      .reduce((count, row) => {
+        return count + Object.values(row.shows).filter(show => show !== null).length;
+      }, 0);
+  }, [scheduleData, selectedDate]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -234,8 +254,8 @@ export default function ScheduleTable() {
           {/* 统计信息 */}
           <div className="mt-4 text-sm text-gray-500 flex items-center gap-4">
             <span>共 {scheduleData.cinemas.length} 家影院</span>
-            <span>共 {scheduleData.halls.length} 个影厅</span>
-            <span>当前日期 {filteredRows.length} 场排片</span>
+            <span>共 {totalHallCount} 个影厅</span>
+            <span>当前日期 {screeningsOnSelectedDate} 场排片</span>
             <button
               onClick={() => navigate('/')}
               className="ml-auto text-[#D4AF37] hover:text-[#D4AF37]/80 flex items-center"

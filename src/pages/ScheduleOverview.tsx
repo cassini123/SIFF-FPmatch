@@ -11,45 +11,14 @@ import { useAutoSchedule } from '@/hooks/useAutoSchedule';
 import AutoScheduleReportPanel from '@/components/schedule/AutoScheduleReportPanel';
 import StaffAssignmentPanel from '@/components/schedule/StaffAssignmentPanel';
 import SubtitlerSelect from '@/components/schedule/SubtitlerSelect';
-import { TIME_MAPPING, getCinemaDistrict } from '@/lib/scheduleConstants';
+import { getCinemaDistrict } from '@/lib/scheduleConstants';
 import { formatDateDisplay, getWeekDay } from '@/lib/parseScheduleTable';
+import {
+  convertToSubtitlerDate,
+  getSubtitlerTimeSlot,
+} from '@/lib/scheduleHelpers';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-// 标准化时间格式（移除前导零）用于匹配
-function normalizeTime(time: string): string {
-  // 将 "08:30" 转换为 "8:30" 用于匹配
-  return time.replace(/^0(\d)/, '$1');
-}
-
-// 根据影片时间获取对应的字幕员时间段
-function getSubtitlerTimeSlot(movieTimeSlot: string): string | null {
-  const normalizedMovieTime = normalizeTime(movieTimeSlot);
-  for (const [subtitlerSlot, movieSlots] of Object.entries(TIME_MAPPING)) {
-    // 标准化影片时间进行比较
-    const normalizedMovieSlots = movieSlots.map(t => normalizeTime(t));
-    if (normalizedMovieSlots.includes(normalizedMovieTime)) {
-      return subtitlerSlot;
-    }
-  }
-  return null;
-}
-
-// 将电影排片日期格式转换为字幕员表日期格式
-// 输入: "2024-06-18" 输出: "18日"
-function convertToSubtitlerDate(dateStr: string): string {
-  if (!dateStr) return '';
-  // 从 "2024-06-18" 提取 "18" 并拼接 "日"
-  const match = dateStr.match(/\d{4}-(\d{2})-(\d{2})/);
-  if (match) {
-    return `${match[2]}日`;
-  }
-  // 如果已经是 "18日" 格式直接返回
-  if (dateStr.includes('日')) {
-    return dateStr;
-  }
-  return dateStr;
-}
 
 export default function ScheduleOverview() {
   const navigate = useNavigate();

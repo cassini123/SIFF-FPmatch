@@ -27,7 +27,6 @@ const HEADER_SCAN_ROWS = 20;
 
 function normalizeSubtitlerTime(time: string): string {
   const t = time.replace(/：/g, ':').trim();
-  if (t === '15:30' || t === '15:30:00') return '15:00';
   const match = t.match(/^0?(\d{1,2}):(\d{2})/);
   if (match) {
     return `${parseInt(match[1], 10)}:${match[2]}`;

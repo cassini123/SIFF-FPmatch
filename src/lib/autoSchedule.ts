@@ -7,43 +7,15 @@ import {
   ParsedSchedule,
   SubtitlerRow,
 } from '@/lib/parseSubtitlerExcel';
-import { 
-  TIME_MAPPING,
+import {
   ScheduleConstraints,
   getCinemaDistrict,
   toShortDistrictName,
 } from '@/lib/scheduleConstants';
-
-// 标准化时间格式（移除前导零）用于匹配
-function normalizeTime(time: string): string {
-  return time.replace(/^0(\d)/, '$1');
-}
-
-// 根据影片时间获取对应的字幕员时间段
-function getSubtitlerTimeSlot(movieTimeSlot: string): string | null {
-  const normalizedMovieTime = normalizeTime(movieTimeSlot);
-  for (const [subtitlerSlot, movieSlots] of Object.entries(TIME_MAPPING)) {
-    const normalizedMovieSlots = movieSlots.map(t => normalizeTime(t));
-    if (normalizedMovieSlots.includes(normalizedMovieTime)) {
-      return subtitlerSlot;
-    }
-  }
-  return null;
-}
-
-// 将电影排片日期格式转换为字幕员表日期格式
-// 输入: "2024-06-18" 输出: "18日"
-function convertToSubtitlerDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const match = dateStr.match(/\d{4}-(\d{2})-(\d{2})/);
-  if (match) {
-    return `${match[2]}日`;
-  }
-  if (dateStr.includes('日')) {
-    return dateStr;
-  }
-  return dateStr;
-}
+import {
+  convertToSubtitlerDate,
+  getSubtitlerTimeSlot,
+} from '@/lib/scheduleHelpers';
 
 // 从LocalStorage加载设置
 function loadConstraints(): ScheduleConstraints {
