@@ -219,19 +219,27 @@ function parseScheduleData(rawData: string[][]): ParsedScheduleTable {
   const datesSet = new Set<string>();
   const cinemasSet = new Set<string>();
   const hallsSet = new Set<string>();
+  let lastDate = '';
+  let lastWeek = '';
   
   for (let rowIdx = headerRowIdx + 1; rowIdx < rawData.length; rowIdx++) {
     const row = rawData[rowIdx];
     
-    // 跳过空行
-    if (!row[0] || !row[2]) continue;
-    
-    const date = formatScheduleDate(row[0]);
-    const week = cellString(row[1]);
+    // Excel 合并单元格时，日期/周几只在首行有值，向下继承
+    if (cellString(row[0])) {
+      lastDate = formatScheduleDate(row[0]);
+    }
+    if (cellString(row[1])) {
+      lastWeek = cellString(row[1]);
+    }
+
     const cinema = cellString(row[2]);
     const hall = cellString(row[3]);
     
-    if (!date || !cinema || !hall) continue;
+    if (!cinema || !hall || !lastDate) continue;
+    
+    const date = lastDate;
+    const week = lastWeek;
     
     datesSet.add(date);
     cinemasSet.add(cinema);
