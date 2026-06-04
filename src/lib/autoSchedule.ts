@@ -9,6 +9,7 @@ import {
 } from '@/lib/parseSubtitlerExcel';
 import {
   ScheduleConstraints,
+  DEFAULT_CONSTRAINTS,
   getCinemaDistrict,
   toShortDistrictName,
 } from '@/lib/scheduleConstants';
@@ -24,17 +25,12 @@ function loadConstraints(): ScheduleConstraints {
   try {
     const saved = localStorage.getItem('settings_constraints');
     if (saved) {
-      return JSON.parse(saved);
+      return { ...DEFAULT_CONSTRAINTS, ...JSON.parse(saved) };
     }
   } catch (e) {
     console.error('加载约束失败:', e);
   }
-  return {
-    maxPerDay: 2,
-    maxTotal: 5,
-    exclusiveTimeSlot: true,
-    preferMoreTimeSlots: true,
-  };
+  return { ...DEFAULT_CONSTRAINTS };
 }
 
 function loadDistrictPriority(): string[] {
@@ -54,9 +50,33 @@ function loadDistrictPriority(): string[] {
 interface SubtitlerStatus {
   row: SubtitlerRow;
   dailyCount: Record<string, number>; // 每天已排场次
+  dailyCinema: Record<string, string>; // 每天已锁定的影院
   totalCount: number; // 总场次
   usedSlots: Set<string>; // 已使用的时间段 (格式: date|timeSlot)
   manualAssignedSlots: Set<string>; // 手动分配的时段
+}
+
+function lockDailyCinema(
+  status: SubtitlerStatus,
+  date: string,
+  cinema: string,
+  constraints: ScheduleConstraints
+): void {
+  if (!constraints.noCrossCinemaPerDay) return;
+  if (!status.dailyCinema[date]) {
+    status.dailyCinema[date] = cinema;
+  }
+}
+
+function isSameDayCinemaAllowed(
+  status: SubtitlerStatus,
+  date: string,
+  cinema: string,
+  constraints: ScheduleConstraints
+): boolean {
+  if (!constraints.noCrossCinemaPerDay) return true;
+  const lockedCinema = status.dailyCinema[date];
+  return !lockedCinema || lockedCinema === cinema;
 }
 
 // 影院-影厅-时间 唯一标识
@@ -68,6 +88,7 @@ function getUniqueSlot(date: string, cinema: string, hall: string, timeSlot: str
 function isSubtitlerAvailable(
   status: SubtitlerStatus,
   date: string,
+  cinema: string,
   subtitlerTimeSlot: string,
   _constraints: ScheduleConstraints
 ): boolean {
@@ -81,9 +102,14 @@ function isSubtitlerAvailable(
     return false;
   }
 
+  // 同日禁止跨影院（允许跨影厅）
+  if (!isSameDayCinemaAllowed(status, date, cinema, _constraints)) {
+    return false;
+  }
+
   // 检查同一时间段是否已在其他地方使用（互斥规则）
   const slotKey = `${date}|${subtitlerTimeSlot}`;
-  if (status.usedSlots.has(slotKey)) {
+  if (_constraints.exclusiveTimeSlot && status.usedSlots.has(slotKey)) {
     return false;
   }
 
@@ -105,6 +131,7 @@ function isSubtitlerAvailable(
 function isPartnerAvailable(
   partner: SubtitlerRow,
   date: string,
+  cinema: string,
   subtitlerTimeSlot: string,
   constraints: ScheduleConstraints,
   statusMap: Map<string, SubtitlerStatus>
@@ -118,9 +145,13 @@ function isPartnerAvailable(
     return false;
   }
 
+  if (!isSameDayCinemaAllowed(partnerStatus, date, cinema, constraints)) {
+    return false;
+  }
+
   // 检查搭档是否被使用
   const slotKey = `${date}|${subtitlerTimeSlot}`;
-  if (partnerStatus.usedSlots.has(slotKey)) {
+  if (constraints.exclusiveTimeSlot && partnerStatus.usedSlots.has(slotKey)) {
     return false;
   }
 
@@ -205,7 +236,7 @@ function assignSubtitleForMovie(
     if (!districtValue) return; // 不负责此区域
 
     // 检查该时间段是否可用（使用字幕员时间和字幕员日期）
-    if (!isSubtitlerAvailable(status, subtitlerDate, subtitlerTimeSlot, constraints)) {
+    if (!isSubtitlerAvailable(status, subtitlerDate, cinema, subtitlerTimeSlot, constraints)) {
       console.log(`[DEBUG] 字幕员 ${status.row.name} 在 ${subtitlerDate} ${subtitlerTimeSlot} 不可用`);
       return;
     }
@@ -242,18 +273,20 @@ function assignSubtitleForMovie(
     selected.status.usedSlots.add(slotKeyUsed);
     selected.status.dailyCount[subtitlerDate] = (selected.status.dailyCount[subtitlerDate] || 0) + 1;
     selected.status.totalCount += 1;
+    lockDailyCinema(selected.status, subtitlerDate, cinema, constraints);
 
     // 检查搭档
     if (subtitler1?.partner) {
       // 找到搭档的原始数据
       const partnerStatus = Array.from(subtitlerStatuses.values()).find(s => s.row.name === subtitler1.partner);
-      if (partnerStatus && isPartnerAvailable(partnerStatus.row, subtitlerDate, subtitlerTimeSlot, constraints, subtitlerStatuses)) {
+      if (partnerStatus && isPartnerAvailable(partnerStatus.row, subtitlerDate, cinema, subtitlerTimeSlot, constraints, subtitlerStatuses)) {
         subtitler2 = partnerStatus.row;
         // 标记搭档已使用
         const partnerSlotKey = `${subtitlerDate}|${subtitlerTimeSlot}`;
         partnerStatus.usedSlots.add(partnerSlotKey);
         partnerStatus.dailyCount[subtitlerDate] = (partnerStatus.dailyCount[subtitlerDate] || 0) + 1;
         partnerStatus.totalCount += 1;
+        lockDailyCinema(partnerStatus, subtitlerDate, cinema, constraints);
       }
     }
 
@@ -261,15 +294,16 @@ function assignSubtitleForMovie(
     if (!subtitler2 && availableSubtitlers.length > 1) {
       for (let i = 1; i < availableSubtitlers.length; i++) {
         const second = availableSubtitlers[i];
-        const secondSlotKey = `${subtitlerDate}|${subtitlerTimeSlot}`;
-        
-        if (!second.status.usedSlots.has(secondSlotKey)) {
-          subtitler2 = second.status.row;
-          second.status.usedSlots.add(secondSlotKey);
-          second.status.dailyCount[subtitlerDate] = (second.status.dailyCount[subtitlerDate] || 0) + 1;
-          second.status.totalCount += 1;
-          break;
+        if (!isSubtitlerAvailable(second.status, subtitlerDate, cinema, subtitlerTimeSlot, constraints)) {
+          continue;
         }
+        subtitler2 = second.status.row;
+        const secondSlotKey = `${subtitlerDate}|${subtitlerTimeSlot}`;
+        second.status.usedSlots.add(secondSlotKey);
+        second.status.dailyCount[subtitlerDate] = (second.status.dailyCount[subtitlerDate] || 0) + 1;
+        second.status.totalCount += 1;
+        lockDailyCinema(second.status, subtitlerDate, cinema, constraints);
+        break;
       }
     }
   }
@@ -422,6 +456,7 @@ export function autoScheduleWithReport(
     subtitlerStatuses.set(row.name, {
       row,
       dailyCount: {},
+      dailyCinema: {},
       totalCount: 0,
       usedSlots: new Set(),
       manualAssignedSlots: new Set(),
@@ -448,6 +483,7 @@ export function autoScheduleWithReport(
         status.manualAssignedSlots.add(slotKey);
         status.dailyCount[subtitlerDate] = (status.dailyCount[subtitlerDate] || 0) + 1;
         status.totalCount += 1;
+        lockDailyCinema(status, subtitlerDate, cinema, constraints);
       }
     }
     if (assignment.subtitler2) {
@@ -457,6 +493,7 @@ export function autoScheduleWithReport(
         status.manualAssignedSlots.add(slotKey);
         status.dailyCount[subtitlerDate] = (status.dailyCount[subtitlerDate] || 0) + 1;
         status.totalCount += 1;
+        lockDailyCinema(status, subtitlerDate, cinema, constraints);
       }
     }
   });

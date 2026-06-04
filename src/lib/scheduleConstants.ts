@@ -112,6 +112,7 @@ export interface ScheduleConstraints {
   maxPerDay: number;         // 每个字幕员每天排班限制
   maxTotal: number;          // 每个字幕员总场次限制
   exclusiveTimeSlot: boolean; // 同一时间段只能在一个影院
+  noCrossCinemaPerDay: boolean; // 同日禁止跨影院（可跨影厅）
   preferMoreTimeSlots: boolean; // 优先使用时间块多的字幕员
 }
 
@@ -119,6 +120,7 @@ export const DEFAULT_CONSTRAINTS: ScheduleConstraints = {
   maxPerDay: 2,              // 不超过2场/天
   maxTotal: 5,               // 不超过5场总计
   exclusiveTimeSlot: true,   // 同一时间段只能在一个影院
+  noCrossCinemaPerDay: false, // 默认关闭，可在设置中开启
   preferMoreTimeSlots: true, // 优先使用时间块多的
 };
 

@@ -293,6 +293,28 @@ export default function Settings() {
                         </label>
                       </div>
 
+
+                      {/* 同日禁止跨影院 */}
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1">
+                          <label className="font-medium text-gray-700">
+                            同日禁止跨影院
+                          </label>
+                          <p className="text-sm text-gray-500 mt-1">
+                            开启后，同一字幕员在同一天内只能在一家影院排班（可跨影厅，不可跨影院）
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={constraints.noCrossCinemaPerDay}
+                            onChange={(e) => handleConstraintChange('noCrossCinemaPerDay', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#D4AF37] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
+                        </label>
+                      </div>
+
                       {/* 优先使用时间块多的字幕员 */}
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex-1">
