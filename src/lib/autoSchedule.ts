@@ -14,7 +14,9 @@ import {
 } from '@/lib/scheduleConstants';
 import {
   convertToSubtitlerDate,
+  countMarkedAvailableSlots,
   getSubtitlerTimeSlot,
+  isSubtitlerSlotMarkedAvailable,
 } from '@/lib/scheduleHelpers';
 
 // 从LocalStorage加载设置
@@ -85,9 +87,9 @@ function isSubtitlerAvailable(
     return false;
   }
 
-  // 检查字幕员表中该时间段是否有空（绿色格子 = null 表示空闲）
+  // 检查问卷是否标记该时段有空（绿色格子 = 填了时间）
   const subtitlerSlots = status.row.schedule[date];
-  if (!subtitlerSlots || subtitlerSlots[subtitlerTimeSlot] !== null) {
+  if (!isSubtitlerSlotMarkedAvailable(subtitlerSlots, subtitlerTimeSlot)) {
     return false;
   }
 
@@ -110,9 +112,9 @@ function isPartnerAvailable(
   const partnerStatus = statusMap.get(partner.name);
   if (!partnerStatus) return false;
 
-  // 检查搭档是否有空（null 表示空闲）
+  // 检查搭档问卷是否标记该时段有空
   const subtitlerSlots = partner.schedule[date];
-  if (!subtitlerSlots || subtitlerSlots[subtitlerTimeSlot] !== null) {
+  if (!isSubtitlerSlotMarkedAvailable(subtitlerSlots, subtitlerTimeSlot)) {
     return false;
   }
 
@@ -211,9 +213,7 @@ function assignSubtitleForMovie(
     // 计算该字幕员当天的时间块数量
     const daySchedule = status.row.schedule[subtitlerDate];
     const availableDates = Object.keys(status.row.schedule);
-    const timeSlotCount = daySchedule 
-      ? Object.values(daySchedule).filter(v => v !== null).length 
-      : 0;
+    const timeSlotCount = countMarkedAvailableSlots(daySchedule);
     
     console.log(`[DEBUG] 字幕员 ${status.row.name}: 日期 ${subtitlerDate} 的 schedule 存在=${!!daySchedule}, 可用时间段=${timeSlotCount}, 所有日期=${availableDates.join(',')}`);
 
@@ -222,8 +222,8 @@ function assignSubtitleForMovie(
 
   // 按优先级排序
   if (constraints.preferMoreTimeSlots) {
-    // 优先使用时间块多的（实际是剩余可用时间块少的优先）
-    availableSubtitlers.sort((a, b) => a.timeSlotCount - b.timeSlotCount);
+    // 优先使用当天可用时间块更多的字幕员
+    availableSubtitlers.sort((a, b) => b.timeSlotCount - a.timeSlotCount);
   } else {
     // 随机排序
     availableSubtitlers.sort(() => Math.random() - 0.5);
@@ -537,6 +537,28 @@ export function autoScheduleWithReport(
         }
       });
     });
+  });
+
+  // 未识别行政区的影院也要写入失败报告（否则静默丢失）
+  scheduleTable.cells.forEach(cell => {
+    if (getCinemaDistrict(cell.cinema)) return;
+    const key = getUniqueSlot(cell.date, cell.cinema, cell.hall, cell.timeSlot);
+    if (result.has(key)) return;
+
+    const { assignment, success, reason, detail } = assignSubtitleForMovie(
+      cell,
+      subtitlerStatuses,
+      constraints
+    );
+    result.set(key, assignment);
+    if (!success && reason) {
+      failures.push({
+        key,
+        label: cellLabel(cell),
+        reason,
+        detail: detail || formatSkipReason(reason),
+      });
+    }
   });
 
   const assigned = Array.from(result.values()).filter(

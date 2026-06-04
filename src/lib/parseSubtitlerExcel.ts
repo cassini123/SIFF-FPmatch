@@ -253,6 +253,7 @@ function findBestHeaderRow(
   return bestRow;
 }
 
+/** 空白 = null（没空）；填了时间等内容 = 有空（可排班） */
 function parseOccupancy(raw: string): string | null {
   if (!raw) return null;
   const letter = raw.split(/[.\s]/)[0].trim();

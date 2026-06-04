@@ -70,6 +70,24 @@ export function getSubtitlerTimeSlot(movieTimeSlot: string): string | null {
     : resolveSubtitlerScheduleSlot(earliest.slot);
 }
 
+/** 问卷格子：填了时间 = 有空；空白 = 没空（与字幕员表绿色格子一致） */
+export function isSubtitlerSlotMarkedAvailable(
+  daySchedule: { [timeSlot: string]: string | null } | undefined,
+  timeSlot: string
+): boolean {
+  if (!daySchedule) return false;
+  const value = daySchedule[timeSlot];
+  return value != null && value !== '';
+}
+
+/** 统计某天问卷中标记为有空的时间段数量 */
+export function countMarkedAvailableSlots(
+  daySchedule: { [timeSlot: string]: string | null } | undefined
+): number {
+  if (!daySchedule) return 0;
+  return Object.values(daySchedule).filter(v => v != null && v !== '').length;
+}
+
 export function convertToSubtitlerDate(dateStr: string): string {
   if (!dateStr) return '';
   const match = dateStr.match(/\d{4}-(\d{2})-(\d{2})/);
@@ -133,7 +151,7 @@ export function getAvailableSubtitlers(
       if (assignedSubtitlers.includes(row.name)) return false;
       const daySchedule = row.schedule[subtitlerDate];
       if (!daySchedule) return false;
-      return daySchedule[subtitlerTimeSlot] === null;
+      return isSubtitlerSlotMarkedAvailable(daySchedule, subtitlerTimeSlot);
     })
     .map(row => ({ id: row.id, name: row.name }));
 }

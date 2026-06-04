@@ -14,7 +14,7 @@ import SubtitlerSelect from '@/components/schedule/SubtitlerSelect';
 import { getCinemaDistrict } from '@/lib/scheduleConstants';
 import { formatDateDisplay, getWeekDay } from '@/lib/parseScheduleTable';
 import {
-  convertToSubtitlerDate,
+  getAvailableSubtitlers as queryAvailableSubtitlers,
   getSubtitlerTimeSlot,
 } from '@/lib/scheduleHelpers';
 import { cn } from '@/lib/utils';
@@ -85,35 +85,14 @@ export default function ScheduleOverview() {
   const getAvailableSubtitlers = useCallback((
     subtitlerTimeSlot: string,
     assignedSubtitlers: string[],
-    date: string // 传入日期参数，不依赖外部状态
+    date: string
   ): { id: string; name: string }[] => {
-    if (!subtitlerData) return [];
-
-    // 转换日期格式：2024-06-18 -> 18日
-    const subtitlerDate = convertToSubtitlerDate(date);
-
-    return subtitlerData.rows
-      .filter(row => {
-        // 检查该字幕员此时段是否有空
-        // schedule[date][timeSlot] === null 表示空闲（绿色格子）
-        // 有值表示已被占用
-        const daySchedule = row.schedule[subtitlerDate];
-        if (!daySchedule) return false;
-        
-        // null 表示空闲，应该返回 true
-        const isAvailable = daySchedule[subtitlerTimeSlot] === null;
-        if (!isAvailable) return false;
-        
-        // 排除已分配的字幕员
-        if (assignedSubtitlers.includes(row.name)) {
-          return false;
-        }
-        return true;
-      })
-      .map(row => ({
-        id: row.id,
-        name: row.name
-      }));
+    return queryAvailableSubtitlers(
+      subtitlerData,
+      subtitlerTimeSlot,
+      assignedSubtitlers,
+      date
+    );
   }, [subtitlerData]);
 
   // 获取当前筛选的cells（按影厅分组）

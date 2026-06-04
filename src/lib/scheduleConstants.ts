@@ -153,5 +153,7 @@ export function toFullDistrictName(shortName: string): string {
 // 行政区全称转简称
 // ============================================
 export function toShortDistrictName(fullName: string): string {
-  return fullName.replace('区', '');
+  // 「浦东新区」含两个「区」字，不能用 replace('区','')（会得到「浦东新」）
+  if (fullName === '浦东新区') return '浦东';
+  return fullName.replace(/区$/, '');
 }
