@@ -9,6 +9,7 @@ import { buildPartnerLogsFromSchedule } from '@/lib/buildPartnerLogs';
 import { getPartnerRelationshipWarnings } from '@/lib/autoSchedule';
 import { cn } from '@/lib/utils';
 import { findBestNameMatch } from '@/lib/searchHelpers';
+import { buildBidirectionalPartnerMap } from '@/lib/partnerOverrides';
 import { toast } from 'sonner';
 
 export default function SubtitlerSchedule() {
@@ -36,10 +37,20 @@ export default function SubtitlerSchedule() {
   const partnerLogData = useMemo(() => {
     if (!subtitlerData) return { partnerLogs: [], partnerWarnings: [] as string[] };
     return {
-      partnerLogs: buildPartnerLogsFromSchedule(scheduleTable),
+      partnerLogs: buildPartnerLogsFromSchedule(
+        scheduleTable,
+        subtitlerData.rows,
+        manualPartnerOverrides
+      ),
       partnerWarnings: getPartnerRelationshipWarnings(subtitlerData.rows, manualPartnerOverrides),
     };
   }, [scheduleTable, subtitlerData, manualPartnerOverrides]);
+
+  const bidirectionalPartnerOf = useMemo(() => {
+    if (!subtitlerData) return new Map<string, string>();
+    return buildBidirectionalPartnerMap(subtitlerData.rows, manualPartnerOverrides).partnerOf;
+  }, [subtitlerData, manualPartnerOverrides]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,6 +68,27 @@ export default function SubtitlerSchedule() {
     setLoading(false);
     setError('暂无本地数据，请先在仪表盘上传字幕员数据');
   }, [subtitlerData]);
+
+  const rows = scheduleData?.rows ?? [];
+
+  const setRowRef = useCallback((rowKey: string) => (el: HTMLTableRowElement | null) => {
+    if (el) rowRefs.current.set(rowKey, el);
+    else rowRefs.current.delete(rowKey);
+  }, []);
+
+  const locateSubtitler = useCallback(() => {
+    const match = findBestNameMatch(nameSearch, rows);
+    if (!match) {
+      toast.error('未找到该字幕员');
+      return;
+    }
+    const rowKey = match.id;
+    setHighlightRowKey(rowKey);
+    window.setTimeout(() => setHighlightRowKey(null), 3000);
+    requestAnimationFrame(() => {
+      rowRefs.current.get(rowKey)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [nameSearch, rows]);
 
   if (loading) {
     return (
@@ -92,7 +124,6 @@ export default function SubtitlerSchedule() {
     );
   }
 
-  const rows = scheduleData.rows;
   const headers = scheduleData.headers ?? {
     dates: scheduleData.dates,
     timeSlots: scheduleData.dates.length ? (Object.keys(scheduleData.rows[0]?.schedule?.[scheduleData.dates[0]] ?? {}) as string[]) : [],
@@ -101,25 +132,6 @@ export default function SubtitlerSchedule() {
   const timeSlots = headers.timeSlots?.length ? headers.timeSlots : SUBTITLER_TIME_SLOTS;
   const districts = headers.districts ?? [];
   const showDistricts = districts.length > 0;
-
-  const setRowRef = useCallback((rowKey: string) => (el: HTMLTableRowElement | null) => {
-    if (el) rowRefs.current.set(rowKey, el);
-    else rowRefs.current.delete(rowKey);
-  }, []);
-
-  const locateSubtitler = useCallback(() => {
-    const match = findBestNameMatch(nameSearch, rows);
-    if (!match) {
-      toast.error('未找到该字幕员');
-      return;
-    }
-    const rowKey = match.id;
-    setHighlightRowKey(rowKey);
-    window.setTimeout(() => setHighlightRowKey(null), 3000);
-    requestAnimationFrame(() => {
-      rowRefs.current.get(rowKey)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  }, [nameSearch, rows]);
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -258,18 +270,30 @@ export default function SubtitlerSchedule() {
               </thead>
               
               <tbody>
-                {rows.map((row, idx) => (
+                {rows.map((row, idx) => {
+                  const hasPartner = bidirectionalPartnerOf.has(row.name);
+                  return (
                   <tr 
                     key={`${row.id}-${row.name}-${idx}`}
                     ref={setRowRef(row.id)}
                     className={cn(
-                      idx % 2 === 0 ? 'bg-white' : 'bg-gray-50',
+                      hasPartner
+                        ? 'bg-indigo-50/70'
+                        : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50',
                       highlightRowKey === row.id && 'ring-2 ring-[#D4AF37] ring-inset bg-[#D4AF37]/10'
                     )}
                   >
                     {/* 姓名 */}
-                    <td className="border border-gray-200 px-4 py-2 font-medium text-gray-800 sticky left-0 bg-inherit z-10 min-w-[80px]">
+                    <td className={cn(
+                      'border border-gray-200 px-4 py-2 font-medium sticky left-0 z-10 min-w-[80px]',
+                      hasPartner
+                        ? 'bg-indigo-100 text-indigo-900'
+                        : 'text-gray-800 bg-inherit'
+                    )}>
                       {row.name}
+                      {hasPartner && (
+                        <i className="fa-solid fa-user-group ml-1.5 text-indigo-500 text-xs" title="已双向绑定搭档" />
+                      )}
                     </td>
                     
                     {/* 区域 */}
@@ -288,8 +312,11 @@ export default function SubtitlerSchedule() {
                       );
                     })}
                     
-                    {/* 搭档（可手动修改，优先级最高） */}
-                    <td className="border border-gray-200 px-2 py-1 text-center min-w-[120px]">
+                    {/* 搭档（可手动修改，须双向绑定） */}
+                    <td className={cn(
+                      'border border-gray-200 px-2 py-1 text-center min-w-[120px]',
+                      hasPartner && 'bg-indigo-50'
+                    )}>
                       <select
                         value={getEffectivePartnerFor(row.name) ?? ''}
                         onChange={(e) => setManualPartner(row.name, e.target.value || null)}
@@ -297,9 +324,17 @@ export default function SubtitlerSchedule() {
                           'w-full rounded border px-2 py-1 text-sm text-center',
                           isManualPartnerOverrideFor(row.name)
                             ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#2B3A67] font-medium'
-                            : 'border-gray-200 bg-white text-gray-600'
+                            : hasPartner
+                              ? 'border-indigo-300 bg-indigo-50 text-indigo-900 font-medium'
+                              : 'border-gray-200 bg-white text-gray-600'
                         )}
-                        title={isManualPartnerOverrideFor(row.name) ? '已手动修改（优先级最高）' : '选择搭档'}
+                        title={
+                          isManualPartnerOverrideFor(row.name)
+                            ? '已手动修改（优先级最高，双向绑定）'
+                            : hasPartner
+                              ? '已双向绑定搭档'
+                              : '选择搭档（将自动双向绑定）'
+                        }
                       >
                         <option value="">无</option>
                         {rows
@@ -328,7 +363,8 @@ export default function SubtitlerSchedule() {
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -339,7 +375,7 @@ export default function SubtitlerSchedule() {
           <span>共 {rows.length} 名字幕员</span>
           <span>时间段 {timeSlots.length} 个</span>
           {showDistricts && <span>区域 {districts.length} 个</span>}
-          <span className="text-xs text-gray-400">金色边框表示手动修改的搭档</span>
+          <span className="text-xs text-gray-400">淡紫色行表示已双向绑定搭档 · 金色边框为手动修改</span>
           <button
             onClick={() => navigate('/')}
             className="ml-auto text-[#D4AF37] hover:text-[#D4AF37]/80 flex items-center"

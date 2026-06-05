@@ -34,7 +34,7 @@ export default function PartnerAssignmentLogPanel({
           <div>
             <h3 className="text-lg font-bold text-gray-800">搭档去向</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              共 {partnerLogs.length} 组搭档 · {totalAssignments} 场同组排班
+              共 {partnerLogs.length} 组双向搭档 · {totalAssignments} 场同组排班
             </p>
           </div>
           <button
@@ -59,7 +59,7 @@ export default function PartnerAssignmentLogPanel({
 
           {partnerLogs.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-8">
-              暂无搭档同组排班记录。请先在排班总表分配场次。
+              暂无双向绑定的搭档。请在字幕员表中设置双向搭档关系。
             </p>
           ) : (
             partnerLogs.map(log => {

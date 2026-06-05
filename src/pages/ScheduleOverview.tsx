@@ -60,7 +60,11 @@ export default function ScheduleOverview() {
   const partnerLogData = useMemo(() => {
     if (!subtitlerData) return { partnerLogs: [], partnerWarnings: [] as string[] };
     return {
-      partnerLogs: buildPartnerLogsFromSchedule(scheduleTable),
+      partnerLogs: buildPartnerLogsFromSchedule(
+        scheduleTable,
+        subtitlerData.rows,
+        manualPartnerOverrides
+      ),
       partnerWarnings: getPartnerRelationshipWarnings(subtitlerData.rows, manualPartnerOverrides),
     };
   }, [scheduleTable, subtitlerData, manualPartnerOverrides]);
@@ -648,7 +652,7 @@ export default function ScheduleOverview() {
                     <th className="border border-gray-300 px-4 py-3 text-center font-bold text-gray-700 min-w-[80px]">
                       时间
                     </th>
-                    <th className="border border-gray-300 px-3 py-3 text-center font-bold text-gray-700 min-w-[140px]">
+                    <th className="border border-gray-300 px-3 py-3 text-center font-bold text-gray-700 min-w-[200px]">
                       电影
                     </th>
                     <th className="border border-gray-300 px-3 py-3 text-center font-bold text-blue-600 min-w-[100px]">
@@ -713,11 +717,15 @@ export default function ScheduleOverview() {
                           </td>
                           
                           <td className="border border-gray-300 px-3 py-3 text-left align-top">
-                            <div className="font-medium text-gray-800 truncate max-w-[140px]" title={cell.movieCode ? `[${cell.movieCode}] ${cell.movieName}` : cell.movieName}>
-                              {cell.movieCode && (
-                                <span className="text-[#2B3A67] mr-1">[{cell.movieCode}]</span>
+                            <div className="text-sm font-medium text-gray-800 whitespace-normal break-words leading-snug">
+                              {cell.movieRaw || (
+                                <>
+                                  {cell.movieCode && (
+                                    <span className="text-[#2B3A67] mr-1">[{cell.movieCode}]</span>
+                                  )}
+                                  {cell.movieName}
+                                </>
                               )}
-                              {cell.movieName}
                             </div>
                           </td>
                           

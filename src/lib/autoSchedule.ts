@@ -7,7 +7,7 @@ import {
   ParsedSchedule,
   SubtitlerRow,
 } from '@/lib/parseSubtitlerExcel';
-import { ManualPartnerOverrides, getEffectivePartner } from '@/lib/partnerOverrides';
+import { ManualPartnerOverrides, buildBidirectionalPartnerMap } from '@/lib/partnerOverrides';
 import {
   ScheduleConstraints,
   DEFAULT_CONSTRAINTS,
@@ -210,36 +210,6 @@ function cellLabel(cell: ScheduleCell): string {
   const codePrefix = cell.movieCode ? `[${cell.movieCode}] ` : '';
   return `${cell.date} ${cell.cinema} ${cell.hall} ${cell.timeSlot} ${codePrefix}《${cell.movieName}》`;
 }
-
-function buildBidirectionalPartnerMap(
-  rows: SubtitlerRow[],
-  manualPartnerOverrides: ManualPartnerOverrides = {}
-): {
-  partnerOf: Map<string, string>;
-  warnings: string[];
-} {
-  const raw = new Map<string, string>();
-  const warnings: string[] = [];
-
-  rows.forEach(row => {
-    const partner = getEffectivePartner(row.name, row.partner, manualPartnerOverrides);
-    if (partner) {
-      raw.set(row.name, partner);
-    }
-  });
-
-  const partnerOf = new Map<string, string>();
-  raw.forEach((partner, name) => {
-    if (raw.get(partner) === name) {
-      partnerOf.set(name, partner);
-    } else if (raw.has(partner)) {
-      warnings.push(`「${name}」与「${partner}」的搭档关系不是双向绑定，排班时将视为无搭档`);
-    }
-  });
-
-  return { partnerOf, warnings };
-}
-
 
 export function getPartnerRelationshipWarnings(
   rows: SubtitlerRow[],

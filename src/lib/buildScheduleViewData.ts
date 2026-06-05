@@ -9,6 +9,8 @@ export interface ScheduleViewItem {
   time: string;
   film: string;
   movieName: string;
+  movieCode: string;
+  movieRaw?: string;
   cinema: string;
   hall: string;
   staff: string;
@@ -44,6 +46,7 @@ export function buildScheduleTableFromParsedData(
         timeSlot,
         movieCode: show.code || '',
         movieName: show.name || '',
+        movieRaw: show.raw || '',
         assignment: {
           subtitler1: null,
           subtitler2: null,
@@ -129,6 +132,8 @@ export function buildScheduleViewData(
         time: cell.timeSlot,
         film: `${cell.movieCode ? `[${cell.movieCode}] ` : ''}${cell.movieName} · ${cell.cinema} ${cell.hall}`,
         movieName: cell.movieName,
+        movieCode: cell.movieCode,
+        movieRaw: cell.movieRaw,
         cinema: cell.cinema,
         hall: cell.hall,
         staff: staffId,

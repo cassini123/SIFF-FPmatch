@@ -123,42 +123,54 @@ function parseMovieShow(raw: string): MovieShow | null {
   if (!raw || raw.trim() === '') {
     return null;
   }
-  
-  // 格式: 代码 + 电影名 + 时长 + 国家 + 票价 [+ 观众见面会]
-  const parts = raw.split(' + ');
-  if (parts.length < 6) {
-    // 格式不正确，尝试简单解析
+
+  const parts = raw.split(' + ').map(part => part.trim()).filter(Boolean);
+
+  if (parts.length >= 6) {
+    const [code, nameAndDuration, country, price, ...rest] = parts;
+
+    const durationMatch = nameAndDuration.match(/(\d+)分钟/);
+    const duration = durationMatch ? `${durationMatch[1]}分钟` : '';
+    const movieName = nameAndDuration.replace(/\d+分钟/, '').trim();
+    const hasMeetup = rest.some(r => r.includes('观众见面会'));
+
     return {
-      code: '',
-      name: raw,
-      duration: '',
-      country: '',
-      price: '',
-      hasMeetup: false,
-      raw: raw
+      code,
+      name: movieName,
+      duration,
+      country,
+      price: price || '',
+      hasMeetup,
+      raw,
     };
   }
-  
-  const [code, nameAndDuration, country, price, ...rest] = parts;
-  
-  // 解析时长 "105分钟"
-  const durationMatch = nameAndDuration.match(/(\d+)分钟/);
-  const duration = durationMatch ? `${durationMatch[1]}分钟` : '';
-  
-  // 提取纯电影名
-  const movieName = nameAndDuration.replace(/\d+分钟/, '').trim();
-  
-  // 检查是否有观众见面会
-  const hasMeetup = rest.some(r => r.includes('观众见面会'));
-  
+
+  if (parts.length >= 2) {
+    const [code, nameAndDuration, country, price, ...rest] = parts;
+    const durationMatch = nameAndDuration.match(/(\d+)分钟/);
+    const duration = durationMatch ? `${durationMatch[1]}分钟` : '';
+    const movieName = nameAndDuration.replace(/\d+分钟/, '').trim();
+    const hasMeetup = rest.some(r => r.includes('观众见面会'));
+
+    return {
+      code,
+      name: movieName,
+      duration,
+      country: country || '',
+      price: price || '',
+      hasMeetup,
+      raw,
+    };
+  }
+
   return {
-    code,
-    name: movieName,
-    duration,
-    country,
-    price: price || '',
-    hasMeetup,
-    raw
+    code: '',
+    name: raw,
+    duration: '',
+    country: '',
+    price: '',
+    hasMeetup: false,
+    raw,
   };
 }
 

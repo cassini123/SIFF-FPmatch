@@ -225,15 +225,26 @@ export default function ScheduleTable() {
                             )}
                           >
                             {show ? (
-                              <div className="text-sm">
-                                <div className="font-medium text-gray-800 truncate" title={show.name}>
-                                  {show.name}
+                              <div className="text-sm text-left whitespace-normal break-words leading-snug">
+                                <div className="font-medium text-gray-800">
+                                  {show.raw || (
+                                    <>
+                                      {show.code && (
+                                        <span className="text-[#2B3A67] mr-1">[{show.code}]</span>
+                                      )}
+                                      {show.name}
+                                    </>
+                                  )}
                                 </div>
-                                <div className="text-xs text-gray-500">{show.duration}</div>
-                                <div className="text-xs text-gray-400">{show.country}</div>
-                                <div className="text-xs text-orange-600 font-medium">
-                                  {show.price}
-                                </div>
+                                {!show.raw && (
+                                  <>
+                                    <div className="text-xs text-gray-500">{show.duration}</div>
+                                    <div className="text-xs text-gray-400">{show.country}</div>
+                                    <div className="text-xs text-orange-600 font-medium">
+                                      {show.price}
+                                    </div>
+                                  </>
+                                )}
                                 {show.hasMeetup && (
                                   <span className="inline-block mt-1 px-1.5 py-0.5 bg-red-100 text-red-600 text-xs rounded">
                                     观众见面会

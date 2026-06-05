@@ -176,9 +176,14 @@ const TimeSlot = ({
       )}
     >
       <div className="mb-2">
-        <div className="font-medium text-sm">{slot.movieName}</div>
-        <div className="text-xs text-gray-500">{slot.cinema} · {slot.hall}</div>
-        <div className="text-xs text-gray-600 mt-1">{slot.time}</div>
+        <div className="font-medium text-sm text-gray-900">
+          {slot.movieCode && (
+            <span className="text-[#2B3A67] mr-1">[{slot.movieCode}]</span>
+          )}
+          {slot.movieName}
+        </div>
+        <div className="text-xs text-gray-600">{slot.cinema} · {slot.hall}</div>
+        <div className="text-xs text-gray-700 mt-1">{slot.time}</div>
       </div>
 
       {mode === 'manual' ? (

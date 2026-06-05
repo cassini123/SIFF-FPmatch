@@ -79,3 +79,49 @@ export function applyManualPartnerChange(
 
   return next;
 }
+
+export function buildBidirectionalPartnerMap(
+  rows: SubtitlerRow[],
+  manualPartnerOverrides: ManualPartnerOverrides = {}
+): {
+  partnerOf: Map<string, string>;
+  warnings: string[];
+} {
+  const raw = new Map<string, string>();
+  const warnings: string[] = [];
+
+  rows.forEach(row => {
+    const partner = getEffectivePartner(row.name, row.partner, manualPartnerOverrides);
+    if (partner) {
+      raw.set(row.name, partner);
+    }
+  });
+
+  const partnerOf = new Map<string, string>();
+  raw.forEach((partner, name) => {
+    if (raw.get(partner) === name) {
+      partnerOf.set(name, partner);
+    } else if (raw.has(partner)) {
+      warnings.push(`「${name}」与「${partner}」的搭档关系不是双向绑定，排班时将视为无搭档`);
+    }
+  });
+
+  return { partnerOf, warnings };
+}
+
+export function getBidirectionalPartner(
+  name: string,
+  rows: SubtitlerRow[],
+  manualPartnerOverrides: ManualPartnerOverrides = {}
+): string | null {
+  return buildBidirectionalPartnerMap(rows, manualPartnerOverrides).partnerOf.get(name) ?? null;
+}
+
+export function hasBidirectionalPartner(
+  name: string,
+  rows: SubtitlerRow[],
+  manualPartnerOverrides: ManualPartnerOverrides = {}
+): boolean {
+  return getBidirectionalPartner(name, rows, manualPartnerOverrides) !== null;
+}
+

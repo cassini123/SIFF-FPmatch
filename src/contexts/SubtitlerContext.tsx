@@ -3,7 +3,7 @@ import { ParsedSchedule } from '@/lib/parseSubtitlerExcel';
 import {
   ManualPartnerOverrides,
   applyManualPartnerChange,
-  getEffectivePartner,
+  getBidirectionalPartner,
   isManualPartnerOverride,
   loadManualPartnerOverrides,
   saveManualPartnerOverrides,
@@ -95,8 +95,8 @@ export function SubtitlerProvider({ children }: { children: ReactNode }) {
 
   const getEffectivePartnerFor = useCallback(
     (name: string): string | null => {
-      const excelPartner = subtitlerData?.rows.find(r => r.name === name)?.partner;
-      return getEffectivePartner(name, excelPartner, manualPartnerOverrides);
+      if (!subtitlerData) return null;
+      return getBidirectionalPartner(name, subtitlerData.rows, manualPartnerOverrides);
     },
     [subtitlerData, manualPartnerOverrides]
   );

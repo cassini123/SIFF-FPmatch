@@ -158,7 +158,12 @@ export default function MatrixView({
                       <div className="text-gray-500">{item.time}</div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
-                      <div className="font-medium">{item.movieName}</div>
+                      <div className="font-medium whitespace-normal break-words">
+                        {item.movieCode && (
+                          <span className="text-[#2B3A67] mr-1">[{item.movieCode}]</span>
+                        )}
+                        {item.movieName}
+                      </div>
                       <div className="text-xs text-gray-500">{item.cinema} · {item.hall}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
