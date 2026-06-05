@@ -6,6 +6,7 @@ import {
   AutoScheduleReport,
   formatSkipReason,
 } from '@/lib/autoSchedule';
+import { savePartnerAssignmentLog } from '@/components/schedule/PartnerAssignmentLogPanel';
 import { ParsedSchedule } from '@/lib/parseSubtitlerExcel';
 
 export function useAutoSchedule(
@@ -49,6 +50,7 @@ export function useAutoSchedule(
         });
 
         setLastReport(report);
+        savePartnerAssignmentLog(report.partnerLogs, report.partnerWarnings);
         toast.dismiss(loadingToast);
 
         const incomplete = report.total - report.assigned;

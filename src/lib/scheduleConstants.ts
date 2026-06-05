@@ -114,6 +114,7 @@ export interface ScheduleConstraints {
   exclusiveTimeSlot: boolean; // 同一时间段只能在一个影院
   noCrossCinemaPerDay: boolean; // 同日禁止跨影院（可跨影厅）
   preferMoreTimeSlots: boolean; // 优先使用时间块多的字幕员
+  preferFewerTimeSlots: boolean; // 优先使用时间块少的字幕员（与 preferMoreTimeSlots 互斥）
 }
 
 export const DEFAULT_CONSTRAINTS: ScheduleConstraints = {
@@ -122,6 +123,7 @@ export const DEFAULT_CONSTRAINTS: ScheduleConstraints = {
   exclusiveTimeSlot: true,   // 同一时间段只能在一个影院
   noCrossCinemaPerDay: false, // 默认关闭，可在设置中开启
   preferMoreTimeSlots: true, // 优先使用时间块多的
+  preferFewerTimeSlots: false,
 };
 
 // ============================================

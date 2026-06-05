@@ -642,7 +642,10 @@ export default function ScheduleOverview() {
                           </td>
                           
                           <td className="border border-gray-300 px-3 py-3 text-left align-top">
-                            <div className="font-medium text-gray-800 truncate max-w-[140px]" title={cell.movieName}>
+                            <div className="font-medium text-gray-800 truncate max-w-[140px]" title={cell.movieCode ? `[${cell.movieCode}] ${cell.movieName}` : cell.movieName}>
+                              {cell.movieCode && (
+                                <span className="text-[#2B3A67] mr-1">[{cell.movieCode}]</span>
+                              )}
                               {cell.movieName}
                             </div>
                           </td>

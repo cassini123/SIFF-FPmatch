@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ParsedSchedule, getDateDisplay } from '@/lib/parseSubtitlerExcel';
 import { SUBTITLER_TIME_SLOTS } from '@/lib/scheduleConstants';
 import { useSubtitler } from '@/contexts/SubtitlerContext';
+import PartnerAssignmentLogPanel, {
+  loadPartnerAssignmentLog,
+} from '@/components/schedule/PartnerAssignmentLogPanel';
 
 export default function SubtitlerSchedule() {
   const [scheduleData, setScheduleData] = useState<ParsedSchedule | null>(null);
@@ -10,6 +13,8 @@ export default function SubtitlerSchedule() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'local' | 'default' | null>(null);
+  const [showPartnerLog, setShowPartnerLog] = useState(false);
+  const [partnerLogData, setPartnerLogData] = useState(() => loadPartnerAssignmentLog());
   
   const { subtitlerData, uploadedFileName } = useSubtitler();
   const navigate = useNavigate();
@@ -97,8 +102,24 @@ export default function SubtitlerSchedule() {
             </div>
           </div>
           
-          {/* 日期选择标签 */}
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setPartnerLogData(loadPartnerAssignmentLog());
+                setShowPartnerLog(true);
+              }}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#D4AF37] text-[#2B3A67] bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 text-sm font-medium transition-colors"
+            >
+              <i className="fa-solid fa-user-group" />
+              搭档去向
+              {partnerLogData && partnerLogData.partnerLogs.length > 0 && (
+                <span className="bg-[#D4AF37] text-white text-xs px-1.5 py-0.5 rounded-full">
+                  {partnerLogData.partnerLogs.length}
+                </span>
+              )}
+            </button>
+            <div className="flex gap-2">
             {(headers.dates ?? scheduleData.dates).map((date) => (
               <button
                 key={date}
@@ -112,6 +133,7 @@ export default function SubtitlerSchedule() {
                 {getDateDisplay(date)}
               </button>
             ))}
+            </div>
           </div>
         </div>
       </div>
@@ -241,6 +263,14 @@ export default function SubtitlerSchedule() {
           </button>
         </div>
       </div>
+
+      {showPartnerLog && (
+        <PartnerAssignmentLogPanel
+          partnerLogs={partnerLogData?.partnerLogs ?? []}
+          partnerWarnings={partnerLogData?.partnerWarnings ?? []}
+          onClose={() => setShowPartnerLog(false)}
+        />
+      )}
     </div>
   );
 }

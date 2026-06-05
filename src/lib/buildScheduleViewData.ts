@@ -42,6 +42,7 @@ export function buildScheduleTableFromParsedData(
         cinema,
         hall,
         timeSlot,
+        movieCode: show.code || '',
         movieName: show.name || '',
         assignment: {
           subtitler1: null,
@@ -126,7 +127,7 @@ export function buildScheduleViewData(
         id: key,
         date: cell.date,
         time: cell.timeSlot,
-        film: `${cell.movieName} · ${cell.cinema} ${cell.hall}`,
+        film: `${cell.movieCode ? `[${cell.movieCode}] ` : ''}${cell.movieName} · ${cell.cinema} ${cell.hall}`,
         movieName: cell.movieName,
         cinema: cell.cinema,
         hall: cell.hall,

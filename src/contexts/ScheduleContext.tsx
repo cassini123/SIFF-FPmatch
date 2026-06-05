@@ -8,6 +8,7 @@ export interface ScheduleCell {
   cinema: string;
   hall: string;
   timeSlot: string;
+  movieCode: string;
   movieName: string;
   assignment: ScheduleAssignment;
   isComplete: boolean;

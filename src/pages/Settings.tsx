@@ -108,11 +108,17 @@ export default function Settings() {
     });
   };
 
-  const handleConstraintChange = (field: keyof ScheduleConstraints, value: any) => {
-    setConstraints(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleConstraintChange = (field: keyof ScheduleConstraints, value: boolean | number) => {
+    setConstraints(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'preferMoreTimeSlots' && value === true) {
+        next.preferFewerTimeSlots = false;
+      }
+      if (field === 'preferFewerTimeSlots' && value === true) {
+        next.preferMoreTimeSlots = false;
+      }
+      return next;
+    });
   };
 
   const validateLanguages = () => {
@@ -315,25 +321,38 @@ export default function Settings() {
                         </label>
                       </div>
 
-                      {/* 优先使用时间块多的字幕员 */}
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-1">
-                          <label className="font-medium text-gray-700">
-                            优先使用时间块多的字幕员
-                          </label>
+                      {/* 时间块优先级（互斥） */}
+                      <div className="p-3 bg-gray-50 rounded-lg space-y-3">
+                        <div>
+                          <label className="font-medium text-gray-700">时间块优先级</label>
                           <p className="text-sm text-gray-500 mt-1">
-                            开启后，系统会优先安排时间块（绿色格子）更多的字幕员
+                            优先多/少二选一；均关闭则随机。自动排班时按此大前提排序候选字幕员。
                           </p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={constraints.preferMoreTimeSlots}
-                            onChange={(e) => handleConstraintChange('preferMoreTimeSlots', e.target.checked)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#D4AF37] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
-                        </label>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700">优先使用时间块多的字幕员</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={constraints.preferMoreTimeSlots}
+                              onChange={(e) => handleConstraintChange('preferMoreTimeSlots', e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#D4AF37] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
+                          </label>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-700">优先使用时间块少的字幕员</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={constraints.preferFewerTimeSlots}
+                              onChange={(e) => handleConstraintChange('preferFewerTimeSlots', e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#D4AF37] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
+                          </label>
+                        </div>
                       </div>
 
                       <button
