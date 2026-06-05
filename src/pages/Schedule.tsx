@@ -25,7 +25,7 @@ import AutoScheduleReportPanel from "@/components/schedule/AutoScheduleReportPan
 export default function SchedulePage() {
   const navigate = useNavigate();
   const { scheduleData } = useScheduleTable();
-  const { subtitlerData } = useSubtitler();
+  const { subtitlerData, manualPartnerOverrides } = useSubtitler();
   const {
     scheduleTable,
     mode,
@@ -48,6 +48,7 @@ export default function SchedulePage() {
   const { isAutoScheduling, lastReport, runAutoSchedule, clearReport } = useAutoSchedule(
     effectiveScheduleTable,
     subtitlerData,
+    manualPartnerOverrides,
     updateAssignment
   );
 

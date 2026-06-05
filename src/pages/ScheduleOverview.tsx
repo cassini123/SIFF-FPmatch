@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useScheduleTable } from '@/contexts/ScheduleTableContext';
@@ -9,7 +9,12 @@ import { buildScheduleViewData } from '@/lib/buildScheduleViewData';
 import { useScheduleTableSync } from '@/hooks/useScheduleTableSync';
 import { useAutoSchedule } from '@/hooks/useAutoSchedule';
 import AutoScheduleReportPanel from '@/components/schedule/AutoScheduleReportPanel';
+import PartnerAssignmentLogPanel from '@/components/schedule/PartnerAssignmentLogPanel';
+import { buildPartnerLogsFromSchedule } from '@/lib/buildPartnerLogs';
+import { getPartnerRelationshipWarnings } from '@/lib/autoSchedule';
 import StaffAssignmentPanel from '@/components/schedule/StaffAssignmentPanel';
+import ScheduleOverviewSearch from '@/components/schedule/ScheduleOverviewSearch';
+import { getSlotKey } from '@/lib/scheduleConstants';
 import SubtitlerSelect from '@/components/schedule/SubtitlerSelect';
 import { getCinemaDistrict } from '@/lib/scheduleConstants';
 import { formatDateDisplay, getWeekDay } from '@/lib/parseScheduleTable';
@@ -23,7 +28,7 @@ import { toast } from 'sonner';
 export default function ScheduleOverview() {
   const navigate = useNavigate();
   const { scheduleData } = useScheduleTable();
-  const { subtitlerData } = useSubtitler();
+  const { subtitlerData, manualPartnerOverrides } = useSubtitler();
   const { 
     scheduleTable, 
     mode, 
@@ -39,12 +44,26 @@ export default function ScheduleOverview() {
   const [selectedCinema, setSelectedCinema] = useState<string>('');
   const [sidebarTab, setSidebarTab] = useState<'cinema' | 'subtitler'>('cinema');
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [showPartnerLog, setShowPartnerLog] = useState(false);
+  const [highlightSlotKey, setHighlightSlotKey] = useState<string | null>(null);
+  const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   const { isAutoScheduling, lastReport, runAutoSchedule, clearReport } = useAutoSchedule(
     scheduleTable,
     subtitlerData,
+    manualPartnerOverrides,
     updateAssignment
   );
+
+  const partnerLogData = useMemo(() => {
+    if (!subtitlerData) return { partnerLogs: [], partnerWarnings: [] as string[] };
+    return {
+      partnerLogs: buildPartnerLogsFromSchedule(scheduleTable),
+      partnerWarnings: getPartnerRelationshipWarnings(subtitlerData.rows, manualPartnerOverrides),
+    };
+  }, [scheduleTable, subtitlerData, manualPartnerOverrides]);
 
   const scheduleViewData = useMemo(
     () => (scheduleTable ? buildScheduleViewData(scheduleTable) : []),
@@ -160,8 +179,38 @@ export default function ScheduleOverview() {
       [field]: value,
       [`${field}Id`]: value ? subtitlerData?.rows.find(r => r.name === value)?.id || null : null
     };
-    updateAssignment(cellKey, assignment);
+    updateAssignment(cellKey, assignment, { source: 'manual' });
   }, [getAssignment, updateAssignment, subtitlerData]);
+
+  const setRowRef = useCallback((slotKey: string) => (el: HTMLTableRowElement | null) => {
+    if (el) rowRefs.current.set(slotKey, el);
+    else rowRefs.current.delete(slotKey);
+  }, []);
+
+  const navigateToSlot = useCallback((slotKey: string) => {
+    if (!scheduleTable) return;
+    const cell = scheduleTable.cells.find(
+      c => getSlotKey(c.date, c.cinema, c.hall, c.timeSlot) === slotKey
+    );
+    if (!cell) {
+      toast.error('未找到该场次');
+      return;
+    }
+    setSelectedDate(cell.date);
+    setSelectedCinema(cell.cinema);
+    setHighlightSlotKey(slotKey);
+    setPendingScrollKey(slotKey);
+    window.setTimeout(() => setHighlightSlotKey(null), 3000);
+  }, [scheduleTable]);
+
+  useEffect(() => {
+    if (!pendingScrollKey) return;
+    const el = rowRefs.current.get(pendingScrollKey);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPendingScrollKey(null);
+    }
+  }, [selectedDate, selectedCinema, filteredCells, pendingScrollKey]);
 
   // 清除所有分配
   const handleClearAll = useCallback(() => {
@@ -350,8 +399,27 @@ export default function ScheduleOverview() {
             </div>
           </div>
 
-          {/* 右上角：模式切换和操作 */}
-          <div className="flex items-center gap-4">
+          {/* 右上角：搜索、模式切换和操作 */}
+          <div className="flex flex-col items-end gap-2">
+            <ScheduleOverviewSearch
+              scheduleTable={scheduleTable}
+              scheduleViewData={scheduleViewData}
+              onNavigateToSlot={navigateToSlot}
+            />
+            <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setShowPartnerLog(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#D4AF37] text-[#2B3A67] bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 text-sm font-medium transition-colors"
+            >
+              <i className="fa-solid fa-user-group" />
+              搭档去向
+              {partnerLogData.partnerLogs.length > 0 && (
+                <span className="bg-[#D4AF37] text-white text-xs px-1.5 py-0.5 rounded-full">
+                  {partnerLogData.partnerLogs.length}
+                </span>
+              )}
+            </button>
             {/* 模式切换 */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
@@ -419,6 +487,7 @@ export default function ScheduleOverview() {
                   {isAutoScheduling ? '排班中...' : '执行自动排班'}
                 </button>
               )}
+            </div>
             </div>
           </div>
         </div>
@@ -548,7 +617,7 @@ export default function ScheduleOverview() {
         </div>
 
         {/* 右侧：排班表格 */}
-        <div className="flex-1 overflow-auto p-4">
+        <div ref={tableScrollRef} className="flex-1 overflow-auto p-4">
           {selectedStaff && (
             <StaffAssignmentPanel
               staff={selectedStaff}
@@ -622,9 +691,11 @@ export default function ScheduleOverview() {
                       return (
                         <tr 
                           key={key}
+                          ref={setRowRef(key)}
                           className={cn(
                             hallIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50',
-                            isComplete && "bg-green-50"
+                            isComplete && "bg-green-50",
+                            highlightSlotKey === key && 'ring-2 ring-[#D4AF37] ring-inset bg-[#D4AF37]/15'
                           )}
                         >
                           {/* 影厅列 - 只在第一行显示并使用rowspan */}
@@ -735,6 +806,13 @@ export default function ScheduleOverview() {
           </div>
         </div>
       </div>
+      {showPartnerLog && (
+        <PartnerAssignmentLogPanel
+          partnerLogs={partnerLogData.partnerLogs}
+          partnerWarnings={partnerLogData.partnerWarnings}
+          onClose={() => setShowPartnerLog(false)}
+        />
+      )}
     </div>
   );
 }

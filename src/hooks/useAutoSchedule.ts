@@ -8,10 +8,12 @@ import {
 } from '@/lib/autoSchedule';
 import { savePartnerAssignmentLog } from '@/components/schedule/PartnerAssignmentLogPanel';
 import { ParsedSchedule } from '@/lib/parseSubtitlerExcel';
+import { ManualPartnerOverrides } from '@/lib/partnerOverrides';
 
 export function useAutoSchedule(
   scheduleTable: ScheduleTable | null,
   subtitlerData: ParsedSchedule | null,
+  manualPartnerOverrides: ManualPartnerOverrides,
   updateAssignment: (
     key: string,
     assignment: ScheduleAssignment,
@@ -34,7 +36,9 @@ export function useAutoSchedule(
       try {
         const manualAssignments = new Map<string, ScheduleAssignment>();
         Object.entries(scheduleTable.assignments).forEach(([key, assignment]) => {
-          if (assignment.subtitler1 || assignment.subtitler2) {
+          const source = scheduleTable.assignmentSources?.[key];
+          const isManual = source === 'manual' || source === undefined;
+          if (isManual && (assignment.subtitler1 || assignment.subtitler2)) {
             manualAssignments.set(key, assignment);
           }
         });
@@ -42,7 +46,8 @@ export function useAutoSchedule(
         const { assignments: result, report } = autoScheduleWithReport(
           scheduleTable,
           subtitlerData,
-          manualAssignments
+          manualAssignments,
+          manualPartnerOverrides
         );
 
         result.forEach((assignment, key) => {
@@ -71,7 +76,7 @@ export function useAutoSchedule(
         setIsAutoScheduling(false);
       }
     }, 100);
-  }, [scheduleTable, subtitlerData, updateAssignment]);
+  }, [scheduleTable, subtitlerData, manualPartnerOverrides, updateAssignment]);
 
   return { isAutoScheduling, lastReport, runAutoSchedule, clearReport: () => setLastReport(null) };
 }

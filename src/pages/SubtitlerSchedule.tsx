@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ParsedSchedule, getDateDisplay } from '@/lib/parseSubtitlerExcel';
 import { SUBTITLER_TIME_SLOTS } from '@/lib/scheduleConstants';
 import { useSubtitler } from '@/contexts/SubtitlerContext';
-import PartnerAssignmentLogPanel, {
-  loadPartnerAssignmentLog,
-} from '@/components/schedule/PartnerAssignmentLogPanel';
+import PartnerAssignmentLogPanel from '@/components/schedule/PartnerAssignmentLogPanel';
+import { useSchedule } from '@/contexts/ScheduleContext';
+import { buildPartnerLogsFromSchedule } from '@/lib/buildPartnerLogs';
+import { getPartnerRelationshipWarnings } from '@/lib/autoSchedule';
+import { cn } from '@/lib/utils';
+import { findBestNameMatch } from '@/lib/searchHelpers';
+import { toast } from 'sonner';
 
 export default function SubtitlerSchedule() {
   const [scheduleData, setScheduleData] = useState<ParsedSchedule | null>(null);
@@ -14,9 +18,28 @@ export default function SubtitlerSchedule() {
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'local' | 'default' | null>(null);
   const [showPartnerLog, setShowPartnerLog] = useState(false);
-  const [partnerLogData, setPartnerLogData] = useState(() => loadPartnerAssignmentLog());
-  
-  const { subtitlerData, uploadedFileName } = useSubtitler();
+  const [nameSearch, setNameSearch] = useState('');
+  const [highlightRowKey, setHighlightRowKey] = useState<string | null>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+
+  const {
+    subtitlerData,
+    uploadedFileName,
+    getEffectivePartnerFor,
+    isManualPartnerOverrideFor,
+    setManualPartner,
+    manualPartnerOverrides,
+  } = useSubtitler();
+  const { scheduleTable } = useSchedule();
+
+  const partnerLogData = useMemo(() => {
+    if (!subtitlerData) return { partnerLogs: [], partnerWarnings: [] as string[] };
+    return {
+      partnerLogs: buildPartnerLogsFromSchedule(scheduleTable),
+      partnerWarnings: getPartnerRelationshipWarnings(subtitlerData.rows, manualPartnerOverrides),
+    };
+  }, [scheduleTable, subtitlerData, manualPartnerOverrides]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -79,6 +102,25 @@ export default function SubtitlerSchedule() {
   const districts = headers.districts ?? [];
   const showDistricts = districts.length > 0;
 
+  const setRowRef = useCallback((rowKey: string) => (el: HTMLTableRowElement | null) => {
+    if (el) rowRefs.current.set(rowKey, el);
+    else rowRefs.current.delete(rowKey);
+  }, []);
+
+  const locateSubtitler = useCallback(() => {
+    const match = findBestNameMatch(nameSearch, rows);
+    if (!match) {
+      toast.error('未找到该字幕员');
+      return;
+    }
+    const rowKey = match.id;
+    setHighlightRowKey(rowKey);
+    window.setTimeout(() => setHighlightRowKey(null), 3000);
+    requestAnimationFrame(() => {
+      rowRefs.current.get(rowKey)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [nameSearch, rows]);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* 头部 */}
@@ -86,6 +128,29 @@ export default function SubtitlerSchedule() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">字幕员时间表</h1>
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="text"
+                value={nameSearch}
+                onChange={(e) => setNameSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    locateSubtitler();
+                  }
+                }}
+                placeholder="搜索字幕员姓名"
+                className="w-44 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-[#D4AF37] focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
+              />
+              <button
+                type="button"
+                onClick={locateSubtitler}
+                className="rounded-lg bg-[#2B3A67] px-3 py-1.5 text-sm text-white hover:bg-[#2B3A67]/90 transition-colors"
+              >
+                <i className="fa-solid fa-location-crosshairs mr-1" />
+                定位
+              </button>
+            </div>
             <div className="flex items-center gap-3 mt-1">
               {dataSource === 'local' && uploadedFileName && (
                 <span className="text-sm text-green-600">
@@ -105,10 +170,7 @@ export default function SubtitlerSchedule() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => {
-                setPartnerLogData(loadPartnerAssignmentLog());
-                setShowPartnerLog(true);
-              }}
+              onClick={() => setShowPartnerLog(true)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#D4AF37] text-[#2B3A67] bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 text-sm font-medium transition-colors"
             >
               <i className="fa-solid fa-user-group" />
@@ -139,7 +201,7 @@ export default function SubtitlerSchedule() {
       </div>
 
       {/* 表格区域 */}
-      <div className="flex-1 overflow-auto p-6">
+      <div ref={tableScrollRef} className="flex-1 overflow-auto p-6">
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
@@ -198,8 +260,12 @@ export default function SubtitlerSchedule() {
               <tbody>
                 {rows.map((row, idx) => (
                   <tr 
-                    key={`${row.id}-${row.name}-${idx}`} 
-                    className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                    key={`${row.id}-${row.name}-${idx}`}
+                    ref={setRowRef(row.id)}
+                    className={cn(
+                      idx % 2 === 0 ? 'bg-white' : 'bg-gray-50',
+                      highlightRowKey === row.id && 'ring-2 ring-[#D4AF37] ring-inset bg-[#D4AF37]/10'
+                    )}
                   >
                     {/* 姓名 */}
                     <td className="border border-gray-200 px-4 py-2 font-medium text-gray-800 sticky left-0 bg-inherit z-10 min-w-[80px]">
@@ -222,9 +288,28 @@ export default function SubtitlerSchedule() {
                       );
                     })}
                     
-                    {/* 搭档 */}
-                    <td className="border border-gray-200 px-4 py-2 text-center text-gray-600 min-w-[80px]">
-                      {row.partner || '-'}
+                    {/* 搭档（可手动修改，优先级最高） */}
+                    <td className="border border-gray-200 px-2 py-1 text-center min-w-[120px]">
+                      <select
+                        value={getEffectivePartnerFor(row.name) ?? ''}
+                        onChange={(e) => setManualPartner(row.name, e.target.value || null)}
+                        className={cn(
+                          'w-full rounded border px-2 py-1 text-sm text-center',
+                          isManualPartnerOverrideFor(row.name)
+                            ? 'border-[#D4AF37] bg-[#D4AF37]/10 text-[#2B3A67] font-medium'
+                            : 'border-gray-200 bg-white text-gray-600'
+                        )}
+                        title={isManualPartnerOverrideFor(row.name) ? '已手动修改（优先级最高）' : '选择搭档'}
+                      >
+                        <option value="">无</option>
+                        {rows
+                          .filter(other => other.name !== row.name)
+                          .map(other => (
+                            <option key={other.id} value={other.name}>
+                              {other.name}
+                            </option>
+                          ))}
+                      </select>
                     </td>
                     
                     {/* 时间段 - 根据选中的日期显示 */}
@@ -254,6 +339,7 @@ export default function SubtitlerSchedule() {
           <span>共 {rows.length} 名字幕员</span>
           <span>时间段 {timeSlots.length} 个</span>
           {showDistricts && <span>区域 {districts.length} 个</span>}
+          <span className="text-xs text-gray-400">金色边框表示手动修改的搭档</span>
           <button
             onClick={() => navigate('/')}
             className="ml-auto text-[#D4AF37] hover:text-[#D4AF37]/80 flex items-center"

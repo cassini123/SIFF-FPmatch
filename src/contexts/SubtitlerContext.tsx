@@ -1,5 +1,13 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { ParsedSchedule } from '@/lib/parseSubtitlerExcel';
+import {
+  ManualPartnerOverrides,
+  applyManualPartnerChange,
+  getEffectivePartner,
+  isManualPartnerOverride,
+  loadManualPartnerOverrides,
+  saveManualPartnerOverrides,
+} from '@/lib/partnerOverrides';
 
 // 字幕员数据Context
 interface SubtitlerContextType {
@@ -7,6 +15,11 @@ interface SubtitlerContextType {
   setSubtitlerData: (data: ParsedSchedule | null) => void;
   uploadedFileName: string | null;
   setUploadedFileName: (name: string | null) => void;
+  manualPartnerOverrides: ManualPartnerOverrides;
+  getEffectivePartnerFor: (name: string) => string | null;
+  isManualPartnerOverrideFor: (name: string) => boolean;
+  setManualPartner: (name: string, partner: string | null) => void;
+  clearManualPartnerOverrides: () => void;
 }
 
 const SubtitlerContext = createContext<SubtitlerContextType | undefined>(undefined);
@@ -18,6 +31,9 @@ const FILE_NAME_KEY = 'subtitler_file_name';
 export function SubtitlerProvider({ children }: { children: ReactNode }) {
   const [subtitlerData, setSubtitlerDataState] = useState<ParsedSchedule | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [manualPartnerOverrides, setManualPartnerOverrides] = useState<ManualPartnerOverrides>(
+    () => loadManualPartnerOverrides()
+  );
   const [isInitialized, setIsInitialized] = useState(false);
 
   // 从localStorage恢复数据
@@ -40,6 +56,12 @@ export function SubtitlerProvider({ children }: { children: ReactNode }) {
     }
     setIsInitialized(true);
   }, []);
+
+  useEffect(() => {
+    if (isInitialized) {
+      saveManualPartnerOverrides(manualPartnerOverrides);
+    }
+  }, [manualPartnerOverrides, isInitialized]);
 
   // 保存到localStorage
   const setSubtitlerData = (data: ParsedSchedule | null) => {
@@ -71,6 +93,33 @@ export function SubtitlerProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getEffectivePartnerFor = useCallback(
+    (name: string): string | null => {
+      const excelPartner = subtitlerData?.rows.find(r => r.name === name)?.partner;
+      return getEffectivePartner(name, excelPartner, manualPartnerOverrides);
+    },
+    [subtitlerData, manualPartnerOverrides]
+  );
+
+  const isManualPartnerOverrideFor = useCallback(
+    (name: string): boolean => isManualPartnerOverride(name, manualPartnerOverrides),
+    [manualPartnerOverrides]
+  );
+
+  const setManualPartner = useCallback(
+    (name: string, partner: string | null) => {
+      if (!subtitlerData) return;
+      setManualPartnerOverrides(prev =>
+        applyManualPartnerChange(prev, name, partner, subtitlerData.rows)
+      );
+    },
+    [subtitlerData]
+  );
+
+  const clearManualPartnerOverrides = useCallback(() => {
+    setManualPartnerOverrides({});
+  }, []);
+
   // 在初始化完成前不渲染children，避免闪烁
   if (!isInitialized) {
     return (
@@ -86,7 +135,12 @@ export function SubtitlerProvider({ children }: { children: ReactNode }) {
         subtitlerData, 
         setSubtitlerData, 
         uploadedFileName, 
-        setUploadedFileName: updateUploadedFileName 
+        setUploadedFileName: updateUploadedFileName,
+        manualPartnerOverrides,
+        getEffectivePartnerFor,
+        isManualPartnerOverrideFor,
+        setManualPartner,
+        clearManualPartnerOverrides,
       }}
     >
       {children}

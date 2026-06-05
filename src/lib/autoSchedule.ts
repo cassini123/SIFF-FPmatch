@@ -7,6 +7,7 @@ import {
   ParsedSchedule,
   SubtitlerRow,
 } from '@/lib/parseSubtitlerExcel';
+import { ManualPartnerOverrides, getEffectivePartner } from '@/lib/partnerOverrides';
 import {
   ScheduleConstraints,
   DEFAULT_CONSTRAINTS,
@@ -210,7 +211,10 @@ function cellLabel(cell: ScheduleCell): string {
   return `${cell.date} ${cell.cinema} ${cell.hall} ${cell.timeSlot} ${codePrefix}《${cell.movieName}》`;
 }
 
-function buildBidirectionalPartnerMap(rows: SubtitlerRow[]): {
+function buildBidirectionalPartnerMap(
+  rows: SubtitlerRow[],
+  manualPartnerOverrides: ManualPartnerOverrides = {}
+): {
   partnerOf: Map<string, string>;
   warnings: string[];
 } {
@@ -218,8 +222,9 @@ function buildBidirectionalPartnerMap(rows: SubtitlerRow[]): {
   const warnings: string[] = [];
 
   rows.forEach(row => {
-    if (row.partner?.trim()) {
-      raw.set(row.name, row.partner.trim());
+    const partner = getEffectivePartner(row.name, row.partner, manualPartnerOverrides);
+    if (partner) {
+      raw.set(row.name, partner);
     }
   });
 
@@ -233,6 +238,14 @@ function buildBidirectionalPartnerMap(rows: SubtitlerRow[]): {
   });
 
   return { partnerOf, warnings };
+}
+
+
+export function getPartnerRelationshipWarnings(
+  rows: SubtitlerRow[],
+  manualPartnerOverrides: ManualPartnerOverrides = {}
+): string[] {
+  return buildBidirectionalPartnerMap(rows, manualPartnerOverrides).warnings;
 }
 
 function getPartnerPairKey(a: string, b: string): string {
@@ -557,15 +570,22 @@ export function formatSkipReason(reason: AutoScheduleSkipReason): string {
 export function autoSchedule(
   scheduleTable: ScheduleTable,
   subtitlerData: ParsedSchedule | null,
-  manualAssignments: Map<string, ScheduleAssignment>
+  manualAssignments: Map<string, ScheduleAssignment>,
+  manualPartnerOverrides: ManualPartnerOverrides = {}
 ): Map<string, ScheduleAssignment> {
-  return autoScheduleWithReport(scheduleTable, subtitlerData, manualAssignments).assignments;
+  return autoScheduleWithReport(
+    scheduleTable,
+    subtitlerData,
+    manualAssignments,
+    manualPartnerOverrides
+  ).assignments;
 }
 
 export function autoScheduleWithReport(
   scheduleTable: ScheduleTable,
   subtitlerData: ParsedSchedule | null,
-  manualAssignments: Map<string, ScheduleAssignment>
+  manualAssignments: Map<string, ScheduleAssignment>,
+  manualPartnerOverrides: ManualPartnerOverrides = {}
 ): { assignments: Map<string, ScheduleAssignment>; report: AutoScheduleReport } {
   const constraints = loadConstraints();
   if (constraints.preferMoreTimeSlots && constraints.preferFewerTimeSlots) {
@@ -605,7 +625,10 @@ export function autoScheduleWithReport(
     });
   });
   
-  const { partnerOf, warnings: partnerMapWarnings } = buildBidirectionalPartnerMap(subtitlerData.rows);
+  const { partnerOf, warnings: partnerMapWarnings } = buildBidirectionalPartnerMap(
+    subtitlerData.rows,
+    manualPartnerOverrides
+  );
   partnerWarnings = partnerMapWarnings;
 
   // 检查20日是否有字幕员数据
