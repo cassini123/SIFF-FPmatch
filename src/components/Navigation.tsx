@@ -4,9 +4,17 @@ import { NavLink } from "react-router-dom";
 export default function Navigation() {
   return (
     <nav className="w-60 bg-[#1E2A4A] p-4 flex flex-col">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#D4AF37]">SIFF排班助手</h1>
-        <p className="text-sm text-gray-400">2025上海国际电影节</p>
+      <div className="mb-8 ml-[10px]">
+        <img
+          src="/siff-logo.png"
+          alt="SIFF"
+          className="w-full max-w-[126px] mt-[5px] mb-3 object-contain"
+        />
+        <h1 className="text-[0.65rem] font-semibold text-[#D4AF37] leading-snug tracking-wider uppercase">
+          <span className="block text-[1.75rem] tracking-widest mt-[5px] relative top-[5px]">SIFF</span>
+          <span className="block mt-1">Film-Person</span>
+          <span className="block">Match System</span>
+        </h1>
       </div>
       
       <ul className="space-y-2 flex-1">
