@@ -33,7 +33,7 @@ export default function SubtitlerSelect({
         className={cn(
           'border rounded px-2 py-1 text-xs cursor-pointer min-w-[80px]',
           disabled ? 'bg-gray-100 cursor-not-allowed opacity-75' : 'hover:border-gray-400',
-          value ? 'bg-blue-50 border-blue-300' : 'bg-white border-gray-300'
+          value ? 'bg-blue-50 border-blue-300 text-gray-900' : 'bg-white border-gray-300 text-gray-400'
         )}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
@@ -62,7 +62,7 @@ export default function SubtitlerSelect({
                 >
                   <button
                     type="button"
-                    className="flex-1 text-left"
+                    className="flex-1 text-left text-gray-900"
                     onClick={() => {
                       onChange(subtitler.name);
                       setIsOpen(false);
