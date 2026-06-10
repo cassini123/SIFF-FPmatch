@@ -24,6 +24,7 @@ import {
 } from '@/lib/scheduleHelpers';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { exportFiveDayConsolidatedExcel } from '@/lib/exportFiveDaySchedule';
 
 export default function ScheduleOverview() {
   const navigate = useNavigate();
@@ -354,6 +355,19 @@ export default function ScheduleOverview() {
     toast.success(`已导出 ${fileName}`);
   }, [scheduleTable, scheduleData]);
 
+  const handleExportFiveDayConsolidated = useCallback(() => {
+    if (!scheduleTable || !scheduleData) {
+      toast.error('暂无排班数据');
+      return;
+    }
+    const fileName = exportFiveDayConsolidatedExcel(
+      scheduleData,
+      scheduleTable,
+      subtitlerData
+    );
+    toast.success(`已导出 ${fileName}`);
+  }, [scheduleTable, scheduleData, subtitlerData]);
+
   // 统计
   const totalCount = filteredCells.length;
   const assignedCount = filteredCells.filter(cell => {
@@ -475,6 +489,19 @@ export default function ScheduleOverview() {
               >
                 <i className="fa-solid fa-file-export mr-1"></i>
                 导出Excel
+              </button>
+              <button
+                onClick={handleExportFiveDayConsolidated}
+                disabled={!scheduleTable || scheduleTable.cells.length === 0}
+                className={cn(
+                  "px-4 py-2 rounded text-white text-sm",
+                  !scheduleTable || scheduleTable.cells.length === 0
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                )}
+              >
+                <i className="fa-solid fa-table mr-1"></i>
+                导出五日合表
               </button>
               {mode === 'auto' && (
                 <button
