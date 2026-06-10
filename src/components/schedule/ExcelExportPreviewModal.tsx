@@ -46,6 +46,43 @@ export default function ExcelExportPreviewModal({
           </button>
         </div>
 
+        {preview.fiveDaySort && (
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 shrink-0">
+            <span className="text-sm text-gray-600 shrink-0">排序方式</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => preview.fiveDaySort!.onChange('by-hall')}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
+                  preview.fiveDaySort.mode === 'by-hall'
+                    ? 'bg-white text-[#2B3A67] shadow'
+                    : 'text-gray-600 hover:text-gray-800'
+                )}
+              >
+                按影厅排序
+              </button>
+              <button
+                type="button"
+                onClick={() => preview.fiveDaySort!.onChange('by-date')}
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
+                  preview.fiveDaySort.mode === 'by-date'
+                    ? 'bg-white text-[#2B3A67] shadow'
+                    : 'text-gray-600 hover:text-gray-800'
+                )}
+              >
+                按日期排序
+              </button>
+            </div>
+            <span className="text-xs text-gray-400 hidden sm:inline">
+              {preview.fiveDaySort.mode === 'by-hall'
+                ? '同一影院影厅的不同日期连续排列'
+                : '按日期、影院、影厅依次排列'}
+            </span>
+          </div>
+        )}
+
         {preview.sheets.length > 1 && (
           <div className="flex gap-2 px-5 py-3 border-b border-gray-100 overflow-x-auto shrink-0">
             {preview.sheets.map((sheet, index) => (
