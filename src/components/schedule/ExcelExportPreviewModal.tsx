@@ -8,8 +8,6 @@ interface ExcelExportPreviewModalProps {
   onConfirm: () => void;
 }
 
-const PREVIEW_ROW_LIMIT = 200;
-
 export default function ExcelExportPreviewModal({
   preview,
   onClose,
@@ -20,8 +18,6 @@ export default function ExcelExportPreviewModal({
   const activeSheet = preview.sheets[activeSheetIndex] ?? preview.sheets[0];
   const headerRow = activeSheet?.rows[0] ?? [];
   const dataRows = activeSheet?.rows.slice(1) ?? [];
-  const visibleDataRows = dataRows.slice(0, PREVIEW_ROW_LIMIT);
-  const truncated = dataRows.length > PREVIEW_ROW_LIMIT;
 
   const mutedRows = useMemo(
     () => new Set(activeSheet?.mutedRowIndices ?? []),
@@ -89,7 +85,7 @@ export default function ExcelExportPreviewModal({
                 </tr>
               </thead>
               <tbody>
-                {visibleDataRows.length === 0 ? (
+                {dataRows.length === 0 ? (
                   <tr>
                     <td
                       colSpan={Math.max(headerRow.length, 1)}
@@ -99,7 +95,7 @@ export default function ExcelExportPreviewModal({
                     </td>
                   </tr>
                 ) : (
-                  visibleDataRows.map((row, rowIdx) => (
+                  dataRows.map((row, rowIdx) => (
                     <tr
                       key={rowIdx}
                       className={cn(
@@ -121,11 +117,6 @@ export default function ExcelExportPreviewModal({
               </tbody>
             </table>
           </div>
-          {truncated && (
-            <p className="text-xs text-amber-600 mt-2">
-              预览仅显示前 {PREVIEW_ROW_LIMIT} 行，导出文件将包含全部 {dataRows.length} 行。
-            </p>
-          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4 shrink-0">
