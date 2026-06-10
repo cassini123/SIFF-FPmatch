@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { ParsedScheduleTable } from '@/contexts/ScheduleTableContext';
 import { ScheduleTable } from '@/contexts/ScheduleContext';
 import { ParsedSchedule } from '@/lib/parseSubtitlerExcel';
+import { ExportPreviewPayload } from '@/lib/exportPreviewTypes';
 import { getCinemaDistrict, getSlotKey } from '@/lib/scheduleConstants';
 import { formatSubtitlerNamesForExport } from '@/lib/scheduleHelpers';
 
@@ -61,29 +62,44 @@ export function buildFiveDayConsolidatedSheetData(
   return [headerRow, ...dataRows];
 }
 
-export function exportFiveDayConsolidatedExcel(
-  scheduleData: ParsedScheduleTable,
-  scheduleTable: ScheduleTable,
-  subtitlerData: ParsedSchedule | null
-): string {
-  const sheetData = buildFiveDayConsolidatedSheetData(scheduleData, scheduleTable, subtitlerData);
-  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+export function getFiveDayConsolidatedExportFileName(): string {
+  return `五日合表_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
+}
 
+function writeFiveDayWorkbook(
+  fileName: string,
+  sheetData: string[][],
+  timeSlotCount: number
+): void {
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
   const colWidths: XLSX.ColInfo[] = [
     { wch: 12 },
     { wch: 6 },
     { wch: 28 },
     { wch: 10 },
   ];
-  for (let i = 0; i < scheduleData.timeSlots.length; i++) {
+  for (let i = 0; i < timeSlotCount; i++) {
     colWidths.push({ wch: 8 }, { wch: 10 }, { wch: 10 });
   }
   ws['!cols'] = colWidths;
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '五日合表');
-
-  const fileName = `五日合表_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
   XLSX.writeFile(wb, fileName);
-  return fileName;
+}
+
+export function buildFiveDayConsolidatedExportPreview(
+  scheduleData: ParsedScheduleTable,
+  scheduleTable: ScheduleTable,
+  subtitlerData: ParsedSchedule | null
+): ExportPreviewPayload {
+  const rows = buildFiveDayConsolidatedSheetData(scheduleData, scheduleTable, subtitlerData);
+  const fileName = getFiveDayConsolidatedExportFileName();
+
+  return {
+    title: '五日合表导出预览',
+    fileName,
+    sheets: [{ name: '五日合表', rows }],
+    download: () => writeFiveDayWorkbook(fileName, rows, scheduleData.timeSlots.length),
+  };
 }

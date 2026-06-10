@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as XLSX from 'xlsx';
 import { useScheduleTable } from '@/contexts/ScheduleTableContext';
 import { useSubtitler } from '@/contexts/SubtitlerContext';
 import { useSchedule } from '@/contexts/ScheduleContext';
@@ -24,7 +23,10 @@ import {
 } from '@/lib/scheduleHelpers';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { exportFiveDayConsolidatedExcel } from '@/lib/exportFiveDaySchedule';
+import { buildFiveDayConsolidatedExportPreview } from '@/lib/exportFiveDaySchedule';
+import { buildDailyScheduleExportPreview } from '@/lib/exportScheduleExcel';
+import { ExportPreviewPayload } from '@/lib/exportPreviewTypes';
+import ExcelExportPreviewModal from '@/components/schedule/ExcelExportPreviewModal';
 
 export default function ScheduleOverview() {
   const navigate = useNavigate();
@@ -48,6 +50,7 @@ export default function ScheduleOverview() {
   const [showPartnerLog, setShowPartnerLog] = useState(false);
   const [highlightSlotKey, setHighlightSlotKey] = useState<string | null>(null);
   const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
+  const [exportPreview, setExportPreview] = useState<ExportPreviewPayload | null>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
@@ -226,133 +229,12 @@ export default function ScheduleOverview() {
     }
   }, [clearAllAssignments]);
 
-  // 导出排班结果为Excel
   const handleExportExcel = useCallback(() => {
     if (!scheduleTable || !scheduleData) {
       toast.error('暂无排班数据');
       return;
     }
-
-    // 收集所有日期
-    const allDates = [...new Set(scheduleTable.cells.map(c => c.date))].sort();
-    
-    // 按日期分组，每个日期一个工作表
-    const wb = XLSX.utils.book_new();
-    
-    allDates.forEach(date => {
-      const dateCells = scheduleTable.cells.filter(c => c.date === date);
-      const weekDay = getWeekDay(date);
-      
-      // 按影院分组并排序：已识别区域在前，未识别区域在后
-      const knownCinemas: typeof dateCells = [];
-      const unknownCinemas: typeof dateCells = [];
-      
-      dateCells.forEach(cell => {
-        if (getCinemaDistrict(cell.cinema)) {
-          knownCinemas.push(cell);
-        } else {
-          unknownCinemas.push(cell);
-        }
-      });
-      
-      // 按影院名称排序
-      const sortByCinema = (a: typeof dateCells[0], b: typeof dateCells[0]) => 
-        a.cinema.localeCompare(b.cinema);
-      knownCinemas.sort(sortByCinema);
-      unknownCinemas.sort(sortByCinema);
-      
-      const sortedCells = [...knownCinemas, ...unknownCinemas];
-      
-      // 构建工作表数据
-      const sheetData: any[] = [];
-      
-      // 添加标题行
-      sheetData.push(['影院', '影厅', '日期', '星期', '时间', '电影', '字幕员1', '字幕员2']);
-      
-      // 按影厅分组，按时间排序
-      const cinemaHallMap = new Map<string, typeof dateCells>();
-      sortedCells.forEach(cell => {
-        const key = `${cell.cinema}|${cell.hall}`;
-        if (!cinemaHallMap.has(key)) {
-          cinemaHallMap.set(key, []);
-        }
-        cinemaHallMap.get(key)!.push(cell);
-      });
-      
-      cinemaHallMap.forEach((cells) => {
-        cells.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
-        
-        cells.forEach(cell => {
-          const key = `${cell.date}|${cell.cinema}|${cell.hall}|${cell.timeSlot}`;
-          const assignment = scheduleTable.assignments[key];
-          
-          sheetData.push([
-            cell.cinema,
-            cell.hall,
-            date,
-            weekDay,
-            cell.timeSlot,
-            cell.movieName,
-            assignment?.subtitler1 || '',
-            assignment?.subtitler2 || ''
-          ]);
-        });
-      });
-      
-      // 创建工作表
-      const ws = XLSX.utils.json_to_sheet(sheetData);
-      
-      // 设置列宽
-      ws['!cols'] = [
-        { wch: 15 },  // 影院
-        { wch: 8 },   // 影厅
-        { wch: 12 },  // 日期
-        { wch: 6 },   // 星期
-        { wch: 8 },   // 时间
-        { wch: 20 },  // 电影
-        { wch: 10 },  // 字幕员1
-        { wch: 10 }   // 字幕员2
-      ];
-      
-      // 标记未识别区域的行（灰色）
-      let currentRow = 2; // 从第2行开始（第1行是标题）
-      
-      // 未识别区域行标灰
-      if (unknownCinemas.length > 0) {
-        cinemaHallMap.forEach((cells) => {
-          const firstCell = cells[0];
-          const isUnknown = !getCinemaDistrict(firstCell.cinema);
-          if (isUnknown) {
-            // 该影院的起始行和结束行
-            const startRow = currentRow;
-            const endRow = currentRow + cells.length - 1;
-            // 设置整行背景色为灰色 (Gray Fill)
-            for (let r = startRow; r <= endRow; r++) {
-              for (let c = 0; c < 8; c++) {
-                const cellRef = XLSX.utils.encode_cell({ r: r - 1, c });
-                if (!ws[cellRef]) ws[cellRef] = {};
-                ws[cellRef].s = {
-                  fill: { fgColor: { rgb: '808080' } },
-                  font: { color: { rgb: 'FFFFFF' } }
-                };
-              }
-            }
-          }
-          currentRow += cells.length;
-        });
-      }
-      
-      // 添加工作表到工作簿
-      const sheetName = date.replace(/-/g, ''); // 如 "20240618"
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    });
-    
-    // 生成文件名
-    const fileName = `排班总表_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`;
-    
-    // 触发下载
-    XLSX.writeFile(wb, fileName);
-    toast.success(`已导出 ${fileName}`);
+    setExportPreview(buildDailyScheduleExportPreview(scheduleTable, scheduleData));
   }, [scheduleTable, scheduleData]);
 
   const handleExportFiveDayConsolidated = useCallback(() => {
@@ -360,13 +242,17 @@ export default function ScheduleOverview() {
       toast.error('暂无排班数据');
       return;
     }
-    const fileName = exportFiveDayConsolidatedExcel(
-      scheduleData,
-      scheduleTable,
-      subtitlerData
+    setExportPreview(
+      buildFiveDayConsolidatedExportPreview(scheduleData, scheduleTable, subtitlerData)
     );
-    toast.success(`已导出 ${fileName}`);
   }, [scheduleTable, scheduleData, subtitlerData]);
+
+  const handleConfirmExport = useCallback(() => {
+    if (!exportPreview) return;
+    exportPreview.download();
+    toast.success(`已导出 ${exportPreview.fileName}`);
+    setExportPreview(null);
+  }, [exportPreview]);
 
   // 统计
   const totalCount = filteredCells.length;
@@ -846,6 +732,13 @@ export default function ScheduleOverview() {
           partnerLogs={partnerLogData.partnerLogs}
           partnerWarnings={partnerLogData.partnerWarnings}
           onClose={() => setShowPartnerLog(false)}
+        />
+      )}
+      {exportPreview && (
+        <ExcelExportPreviewModal
+          preview={exportPreview}
+          onClose={() => setExportPreview(null)}
+          onConfirm={handleConfirmExport}
         />
       )}
     </div>
