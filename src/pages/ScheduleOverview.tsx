@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { buildFiveDayConsolidatedExportPreview } from '@/lib/exportFiveDaySchedule';
 import { buildDailyScheduleExportPreview } from '@/lib/exportScheduleExcel';
-import { ExportPreviewPayload } from '@/lib/exportPreviewTypes';
+import { ExportPreviewPayload, FiveDaySortMode } from '@/lib/exportPreviewTypes';
 import ExcelExportPreviewModal from '@/components/schedule/ExcelExportPreviewModal';
 
 export default function ScheduleOverview() {
@@ -237,15 +237,37 @@ export default function ScheduleOverview() {
     setExportPreview(buildDailyScheduleExportPreview(scheduleTable, scheduleData));
   }, [scheduleTable, scheduleData]);
 
+  const handleFiveDaySortChange = useCallback(
+    (mode: FiveDaySortMode) => {
+      if (!scheduleTable || !scheduleData) return;
+      setExportPreview(
+        buildFiveDayConsolidatedExportPreview(
+          scheduleData,
+          scheduleTable,
+          subtitlerData,
+          mode,
+          handleFiveDaySortChange
+        )
+      );
+    },
+    [scheduleTable, scheduleData, subtitlerData]
+  );
+
   const handleExportFiveDayConsolidated = useCallback(() => {
     if (!scheduleTable || !scheduleData) {
       toast.error('暂无排班数据');
       return;
     }
     setExportPreview(
-      buildFiveDayConsolidatedExportPreview(scheduleData, scheduleTable, subtitlerData)
+      buildFiveDayConsolidatedExportPreview(
+        scheduleData,
+        scheduleTable,
+        subtitlerData,
+        'by-date',
+        handleFiveDaySortChange
+      )
     );
-  }, [scheduleTable, scheduleData, subtitlerData]);
+  }, [scheduleTable, scheduleData, subtitlerData, handleFiveDaySortChange]);
 
   const handleConfirmExport = useCallback(() => {
     if (!exportPreview) return;

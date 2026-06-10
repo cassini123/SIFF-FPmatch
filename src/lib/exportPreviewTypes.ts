@@ -1,3 +1,5 @@
+export type FiveDaySortMode = 'by-date' | 'by-hall';
+
 export interface ExportPreviewSheet {
   name: string;
   rows: string[][];
@@ -10,4 +12,8 @@ export interface ExportPreviewPayload {
   fileName: string;
   sheets: ExportPreviewSheet[];
   download: () => void;
+  fiveDaySort?: {
+    mode: FiveDaySortMode;
+    onChange: (mode: FiveDaySortMode) => void;
+  };
 }

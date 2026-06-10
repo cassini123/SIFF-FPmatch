@@ -2,13 +2,34 @@ import * as XLSX from 'xlsx';
 import { ParsedScheduleTable } from '@/contexts/ScheduleTableContext';
 import { ScheduleTable } from '@/contexts/ScheduleContext';
 import { ParsedSchedule } from '@/lib/parseSubtitlerExcel';
-import { ExportPreviewPayload } from '@/lib/exportPreviewTypes';
+import { ExportPreviewPayload, FiveDaySortMode } from '@/lib/exportPreviewTypes';
 import { getCinemaDistrict, getSlotKey } from '@/lib/scheduleConstants';
 import { formatSubtitlerNamesForExport } from '@/lib/scheduleHelpers';
 
-function sortScheduleRows(rows: ParsedScheduleTable['rows']): ParsedScheduleTable['rows'] {
-  const known: ParsedScheduleTable['rows'] = [];
-  const unknown: ParsedScheduleTable['rows'] = [];
+type ScheduleRow = ParsedScheduleTable['rows'][0];
+
+function compareByDateCinemaHall(a: ScheduleRow, b: ScheduleRow): number {
+  const dateCmp = a.date.localeCompare(b.date);
+  if (dateCmp !== 0) return dateCmp;
+  const cinemaCmp = a.cinema.localeCompare(b.cinema);
+  if (cinemaCmp !== 0) return cinemaCmp;
+  return a.hall.localeCompare(b.hall);
+}
+
+function compareByCinemaHallDate(a: ScheduleRow, b: ScheduleRow): number {
+  const cinemaCmp = a.cinema.localeCompare(b.cinema);
+  if (cinemaCmp !== 0) return cinemaCmp;
+  const hallCmp = a.hall.localeCompare(b.hall);
+  if (hallCmp !== 0) return hallCmp;
+  return a.date.localeCompare(b.date);
+}
+
+function sortScheduleRows(
+  rows: ParsedScheduleTable['rows'],
+  sortMode: FiveDaySortMode
+): ParsedScheduleTable['rows'] {
+  const known: ScheduleRow[] = [];
+  const unknown: ScheduleRow[] = [];
 
   rows.forEach(row => {
     if (getCinemaDistrict(row.cinema)) {
@@ -18,23 +39,19 @@ function sortScheduleRows(rows: ParsedScheduleTable['rows']): ParsedScheduleTabl
     }
   });
 
-  const byDateCinemaHall = (a: ParsedScheduleTable['rows'][0], b: ParsedScheduleTable['rows'][0]) => {
-    const dateCmp = a.date.localeCompare(b.date);
-    if (dateCmp !== 0) return dateCmp;
-    const cinemaCmp = a.cinema.localeCompare(b.cinema);
-    if (cinemaCmp !== 0) return cinemaCmp;
-    return a.hall.localeCompare(b.hall);
-  };
+  const comparator =
+    sortMode === 'by-hall' ? compareByCinemaHallDate : compareByDateCinemaHall;
 
-  known.sort(byDateCinemaHall);
-  unknown.sort(byDateCinemaHall);
+  known.sort(comparator);
+  unknown.sort(comparator);
   return [...known, ...unknown];
 }
 
 export function buildFiveDayConsolidatedSheetData(
   scheduleData: ParsedScheduleTable,
   scheduleTable: ScheduleTable,
-  subtitlerData: ParsedSchedule | null
+  subtitlerData: ParsedSchedule | null,
+  sortMode: FiveDaySortMode = 'by-date'
 ): string[][] {
   const { timeSlots } = scheduleData;
   const headerRow: string[] = ['日期', '周', '影院', '影厅'];
@@ -42,7 +59,7 @@ export function buildFiveDayConsolidatedSheetData(
     headerRow.push(timeSlot, '字幕员1', '字幕员2');
   }
 
-  const dataRows = sortScheduleRows(scheduleData.rows).map(row => {
+  const dataRows = sortScheduleRows(scheduleData.rows, sortMode).map(row => {
     const line: string[] = [row.date, row.week, row.cinema, row.hall];
     for (const timeSlot of timeSlots) {
       const show = row.shows[timeSlot];
@@ -91,9 +108,16 @@ function writeFiveDayWorkbook(
 export function buildFiveDayConsolidatedExportPreview(
   scheduleData: ParsedScheduleTable,
   scheduleTable: ScheduleTable,
-  subtitlerData: ParsedSchedule | null
+  subtitlerData: ParsedSchedule | null,
+  sortMode: FiveDaySortMode = 'by-date',
+  onSortChange?: (mode: FiveDaySortMode) => void
 ): ExportPreviewPayload {
-  const rows = buildFiveDayConsolidatedSheetData(scheduleData, scheduleTable, subtitlerData);
+  const rows = buildFiveDayConsolidatedSheetData(
+    scheduleData,
+    scheduleTable,
+    subtitlerData,
+    sortMode
+  );
   const fileName = getFiveDayConsolidatedExportFileName();
 
   return {
@@ -101,5 +125,11 @@ export function buildFiveDayConsolidatedExportPreview(
     fileName,
     sheets: [{ name: '五日合表', rows }],
     download: () => writeFiveDayWorkbook(fileName, rows, scheduleData.timeSlots.length),
+    fiveDaySort: onSortChange
+      ? {
+          mode: sortMode,
+          onChange: onSortChange,
+        }
+      : undefined,
   };
 }
